@@ -1,75 +1,107 @@
-// lib/services/plan_service.dart
 import 'package:shared_preferences/shared_preferences.dart';
-import '../models/user_plan.dart';
 
 class PlanService {
-  static const _keyIsPremium = 'user_is_premium';
-  static const _keyDemoUsesLeft = 'user_demo_uses_left';
+  // Premium anahtarı
+  static const String _keyIsPremium = "is_premium";
 
-  /// Şu anki planı SharedPreferences'tan yükler.
-  /// Eğer kayıt yoksa: DEMO + 1 kullanım hakkı ile başlar.
-  static Future<UserPlan> getCurrentPlan() async {
+  // Günlük reset anahtarı
+  static const String _keyLastReset = "usage_last_reset";
+
+  // Her feature için kullanım sayaçları
+  static const String _keyGeneral = "usage_general";
+  static const String _keyScenario = "usage_scenario";
+  static const String _keyImage = "usage_image";
+  static const String _keyExam = "usage_exam";
+
+  // Demo limiti: her feature için günde sadece 1 kez
+  static const int dailyLimit = 1;
+
+  /// Kullanıcı premium mu?
+  static Future<bool> isPremium() async {
     final prefs = await SharedPreferences.getInstance();
-
-    final isPremium = prefs.getBool(_keyIsPremium) ?? false;
-    final demoUsesLeft = prefs.getInt(_keyDemoUsesLeft);
-
-    // Hiç kayıt yoksa default: demo + 1 hak
-    if (!isPremium && demoUsesLeft == null) {
-      return UserPlan.initialDemo();
-    }
-
-    return UserPlan(
-      isPremium: isPremium,
-      demoUsesLeft: demoUsesLeft ?? 0,
-    );
+    return prefs.getBool(_keyIsPremium) ?? false;
   }
 
-  /// Kullanıcıyı premium yapar (in-app purchase sonrası çağrılacak).
+  /// Kullanıcıyı premium yap
   static Future<void> setPremium() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_keyIsPremium, true);
-
-    // Premiumda demo hakkına gerek yok, 0 yapıyoruz (opsiyonel)
-    await prefs.setInt(_keyDemoUsesLeft, 0);
+    await resetAllUsage();
   }
 
-  /// Demo modunu başa sarmak istersen (test için kullanışlı)
-  static Future<void> resetDemo() async {
+  /// Gerekirse günlük sayaç reseti yap
+  static Future<void> _resetIfNeeded() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_keyIsPremium, false);
-    await prefs.setInt(_keyDemoUsesLeft, 1);
+    final today = DateTime.now().toString().substring(0, 10);
+    final lastReset = prefs.getString(_keyLastReset);
+
+    // İlk kez çalışıyorsa veya gün değişmişse reset yapılır
+    if (lastReset != today) {
+      await prefs.setString(_keyLastReset, today);
+
+      await prefs.setInt(_keyGeneral, 0);
+      await prefs.setInt(_keyScenario, 0);
+      await prefs.setInt(_keyImage, 0);
+      await prefs.setInt(_keyExam, 0);
+    }
   }
 
-  /// Sınav başlatmadan ÖNCE çağır:
-  /// - Premium ise: HER ZAMAN true
-  /// - Demo ise: hak varsa true, yoksa false
-  static Future<bool> canStartExam() async {
-    final plan = await getCurrentPlan();
-    if (plan.isPremium) return true;
-    return plan.demoUsesLeft > 0;
+  /// Feature usage key mapping
+  static String _featureKey(String f) {
+    switch (f) {
+      case "general":
+        return _keyGeneral;
+      case "scenario":
+        return _keyScenario;
+      case "image":
+        return _keyImage;
+      case "exam":
+        return _keyExam;
+      default:
+        throw Exception("Unknown feature name: $f");
+    }
   }
 
-  /// Sınavı gerçekten başlattıysan:
-  /// - Premium ise: hiçbir şey yapmaz
-  /// - Demo ise: 1 hakkı düşürür
-  static Future<void> registerExamUsage() async {
+  /// Feature'ın bugün kaç defa kullanıldığını getir
+  static Future<int> _getUsage(String key) async {
     final prefs = await SharedPreferences.getInstance();
-    final isPremium = prefs.getBool(_keyIsPremium) ?? false;
+    return prefs.getInt(key) ?? 0;
+  }
 
-    if (isPremium) {
-      // Premium kullanıcının kullanım sayısını takip etmiyoruz
-      return;
-    }
+  /// Kullanım kaydı arttırma
+  static Future<void> _incrementUsage(String key) async {
+    final prefs = await SharedPreferences.getInstance();
+    final current = prefs.getInt(key) ?? 0;
+    await prefs.setInt(key, current + 1);
+  }
 
-    final currentLeft = prefs.getInt(_keyDemoUsesLeft);
+  /// Feature'ı kullanabilir mi?
+  static Future<bool> canUseFeature(String feature) async {
+    await _resetIfNeeded();
 
-    // Hiç kayıt yoksa: default 1 hak varmış gibi düşün → 0'a düşür
-    if (currentLeft == null) {
-      await prefs.setInt(_keyDemoUsesLeft, 0);
-    } else {
-      final updated = currentLeft > 0 ? currentLeft - 1 : 0;
-      await prefs.setInt(_keyDemoUsesLeft, updated);
-    }
+    // Premium ise sonsuz kullanım
+    if (await isPremium()) return true;
+
+    // Değilse sayaç kontrolü
+    final key = _featureKey(feature);
+    final used = await _getUsage(key);
+
+    return used < dailyLimit;
+  }
+
+  /// Kullanım kaydı
+  static Future<void> registerUsage(String feature) async {
+    await _resetIfNeeded();
+    final key = _featureKey(feature);
+    await _incrementUsage(key);
+  }
+
+  /// Premium geçişi veya reset durumunda tüm sayaçları sıfırla
+  static Future<void> resetAllUsage() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_keyGeneral, 0);
+    await prefs.setInt(_keyScenario, 0);
+    await prefs.setInt(_keyImage, 0);
+    await prefs.setInt(_keyExam, 0);
   }
 }

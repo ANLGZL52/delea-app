@@ -2,6 +2,10 @@
 import 'package:flutter/material.dart';
 import 'question_screen.dart';
 
+// DEMO/PREMIUM için eklenen importlar
+import '../services/plan_service.dart';
+import '../widgets/demo_limit_dialog.dart';
+
 class ExamIntroScreen extends StatelessWidget {
   const ExamIntroScreen({super.key});
 
@@ -81,7 +85,31 @@ class ExamIntroScreen extends StatelessWidget {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: () {
+                onPressed: () async {
+                  // 🔐 DEMO/PREMIUM KONTROLÜ
+                  final canUse = await PlanService.canUseFeature("exam");
+
+                  if (!canUse) {
+                    // Demo hakkı dolmuş kullanıcı
+                    // Kullanıcıya uyarı dialogu göster
+                    // (Bu widget'ı lib/widgets/demo_limit_dialog.dart içinde tanımladık)
+                    // featureName, dialogdaki açıklama metninde kullanılacak
+                    // (Örn: Exam Simulation)
+                    // ignore: use_build_context_synchronously
+                    showDialog(
+                      context: context,
+                      builder: (_) => const DemoLimitDialog(
+                        featureName: "Exam Simulation",
+                      ),
+                    );
+                    return;
+                  }
+
+                  // Kullanabiliyorsa: önce kullanımını kaydet
+                  await PlanService.registerUsage("exam");
+
+                  // Sonra eski davranış: sınav ekranına geç
+                  // ignore: use_build_context_synchronously
                   Navigator.pushReplacement(
                     context,
                     MaterialPageRoute(

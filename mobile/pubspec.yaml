@@ -17,7 +17,8 @@ dependencies:
   record_windows: ^1.0.7
   path_provider: ^2.1.5
   flutter_tts: ^3.8.0
-  shared_preferences: ^2.3.2   # 🔹 Demo/Premium & sayaçlar için ekledik
+  shared_preferences: ^2.3.2   # Demo/Premium & sayaçlar için
+  in_app_purchase: ^3.1.8      # Store ödemeleri için eklendi
 
 dev_dependencies:
   flutter_test:

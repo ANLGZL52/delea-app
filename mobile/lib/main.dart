@@ -1,8 +1,14 @@
-// lib/main.dart
 import 'package:flutter/material.dart';
 import 'screens/main_home_screen.dart';
+import 'screens/premium_screen.dart';
+import 'services/purchase_service.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Satın alma servisini başlat
+  await PurchaseService.instance.init();
+
   runApp(const DeleaApp());
 }
 
@@ -18,6 +24,9 @@ class DeleaApp extends StatelessWidget {
         scaffoldBackgroundColor: const Color(0xFF050509),
       ),
       home: const MainHomeScreen(),
+      routes: {
+        '/premium': (_) => const PremiumScreen(),
+      },
     );
   }
 }

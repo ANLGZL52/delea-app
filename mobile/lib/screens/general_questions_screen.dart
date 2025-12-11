@@ -12,6 +12,10 @@ import '../models/exam_question.dart';
 import '../data/exam_question_bank.dart';
 import 'exam_result_screen.dart';
 
+// 🔐 DEMO / PREMIUM kontrolü için eklenen importlar
+import '../services/plan_service.dart';
+import '../widgets/demo_limit_dialog.dart';
+
 class GeneralQuestionsScreen extends StatefulWidget {
   const GeneralQuestionsScreen({super.key});
 
@@ -63,6 +67,7 @@ class _GeneralQuestionsScreenState extends State<GeneralQuestionsScreen> {
         _translatedQuestion = translated;
       });
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Çeviri alınırken hata: $e")),
       );
@@ -79,6 +84,7 @@ class _GeneralQuestionsScreenState extends State<GeneralQuestionsScreen> {
   }
 
   Future<void> _toggleRecording() async {
+    // Eğer şu anda kayıttaysak → kaydı durdur
     if (_isRecording) {
       final path = await _recorder.stop();
       setState(() => _isRecording = false);
@@ -89,7 +95,25 @@ class _GeneralQuestionsScreenState extends State<GeneralQuestionsScreen> {
       return;
     }
 
+    // Gönderim sırasında yeniden başlatma izni verme
+    if (_isSending) return;
+
+    // 🎯 DEMO / PREMIUM KONTROLÜ
+    final canUse = await PlanService.canUseFeature("general");
+    if (!canUse) {
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        builder: (_) => const DemoLimitDialog(
+          featureName: "General Questions",
+        ),
+      );
+      return;
+    }
+
+    // Mikrofon izni
     if (!await _recorder.hasPermission()) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Mikrofon izni gerekli.")),
       );
@@ -108,6 +132,9 @@ class _GeneralQuestionsScreenState extends State<GeneralQuestionsScreen> {
       path: filePath,
     );
 
+    // ✔ Kullanım hakkını kaydet → bugün için bu sekmeden sadece 1 kayıt
+    await PlanService.registerUsage("general");
+
     setState(() => _isRecording = true);
   }
 
@@ -120,6 +147,7 @@ class _GeneralQuestionsScreenState extends State<GeneralQuestionsScreen> {
       // 🔹 Sorunun kendisini, soru ID/type ile birlikte gönderiyoruz
       final examQuestion = _currentQuestion;
 
+      if (!mounted) return;
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -130,6 +158,7 @@ class _GeneralQuestionsScreenState extends State<GeneralQuestionsScreen> {
         ),
       );
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Değerlendirme hatası: $e")),
       );
