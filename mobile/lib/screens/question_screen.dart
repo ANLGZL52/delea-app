@@ -5,7 +5,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
-import 'package:flutter_tts/flutter_tts.dart'; // 🔊 TTS
+import 'package:flutter_tts/flutter_tts.dart';
 
 import '../models/exam_question.dart';
 import '../data/exam_question_bank.dart';
@@ -21,7 +21,10 @@ class QuestionScreen extends StatefulWidget {
 
 class _QuestionScreenState extends State<QuestionScreen> {
   late final List<ExamQuestion> _questions;
-  late final List<Map<String, dynamic>?> _results; // her soru için sonuç
+
+  /// Her soru için backend sonucu; bazı sorular henüz
+  /// değerlendirilmemiş olabileceği için nullable tuttuk.
+  late final List<Map<String, dynamic>?> _results;
 
   int _currentIndex = 0;
 
@@ -44,7 +47,7 @@ class _QuestionScreenState extends State<QuestionScreen> {
     _tts = FlutterTts();
     _configureTts();
 
-    // 13 soruluk set
+    // 13 soruluk sınav seti
     _questions = ExamQuestionBank.generateExam(
       introCount: 2,
       generalCount: 6,
@@ -53,7 +56,10 @@ class _QuestionScreenState extends State<QuestionScreen> {
     );
 
     // Başta tüm sonuçlar null
-    _results = List<Map<String, dynamic>?>.filled(_questions.length, null);
+    _results = List<Map<String, dynamic>?>.filled(
+      _questions.length,
+      null,
+    );
 
     // İlk soruyu otomatik sesli oku
     _speakCurrentQuestion();
@@ -61,27 +67,27 @@ class _QuestionScreenState extends State<QuestionScreen> {
 
   void _configureTts() {
     _tts.setLanguage("en-US");
-    _tts.setSpeechRate(0.45); // biraz yavaş, anlaşılır tempo
+    _tts.setSpeechRate(0.45);
     _tts.setPitch(1.0);
+    _tts.setVolume(1.0);
   }
 
   @override
   void dispose() {
-    _tts.stop(); // TTS'i durdur
+    _tts.stop();
     _recorder.dispose();
     super.dispose();
   }
 
   ExamQuestion get _currentQuestion => _questions[_currentIndex];
 
-  // 🔊 Mevcut soruyu sesli okuyan fonksiyon
+  // 🔊 Mevcut soruyu sesli okur
   Future<void> _speakCurrentQuestion() async {
     final q = _currentQuestion;
 
     await _tts.stop();
 
     String textToRead = q.text;
-
     if (q.type == 'image') {
       textToRead =
           "Image based question. Please describe the picture in detail. ${q.text}";
@@ -94,15 +100,12 @@ class _QuestionScreenState extends State<QuestionScreen> {
   Future<void> _translateCurrentQuestion() async {
     final q = _currentQuestion;
 
-    // Aynı soruda çeviri varsa direkt göster
     if (_currentTranslation != null) {
       _showTranslationDialog(_currentTranslation!);
       return;
     }
 
-    setState(() {
-      _isTranslating = true;
-    });
+    setState(() => _isTranslating = true);
 
     try {
       final translated = await ApiService.translateQuestion(q.text);
@@ -116,9 +119,7 @@ class _QuestionScreenState extends State<QuestionScreen> {
       _showTranslationDialog(translated);
     } catch (e) {
       if (!mounted) return;
-      setState(() {
-        _isTranslating = false;
-      });
+      setState(() => _isTranslating = false);
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Çeviri alınırken hata oluştu: $e')),
@@ -129,62 +130,59 @@ class _QuestionScreenState extends State<QuestionScreen> {
   void _showTranslationDialog(String text) {
     showDialog(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Türkçe Çeviri'),
-          content: SingleChildScrollView(
-            child: Text(
-              text,
-              style: const TextStyle(fontSize: 15),
-            ),
+      builder: (context) => AlertDialog(
+        title: const Text('Türkçe Çeviri'),
+        content: SingleChildScrollView(
+          child: Text(
+            text,
+            style: const TextStyle(fontSize: 15),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Kapat'),
-            ),
-          ],
-        );
-      },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Kapat'),
+          ),
+        ],
+      ),
     );
   }
 
   Future<void> _toggleRecording() async {
     if (_isRecording) {
-      // ✅ Kaydı durdur
+      // Kaydı durdur
       final path = await _recorder.stop();
       setState(() => _isRecording = false);
 
       if (path != null) {
         await _sendAudioToBackend(File(path));
       }
-    } else {
-      // ✅ Kayda başla
-      if (!await _recorder.hasPermission()) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Mikrofon izni gerekli.')),
-          );
-        }
-        return;
-      }
-
-      final dir = await getTemporaryDirectory();
-      final filePath = '${dir.path}/answer_${_currentIndex + 1}.m4a';
-
-      await _recorder.start(
-        const RecordConfig(
-          encoder: AudioEncoder.aacLc,
-          sampleRate: 44100,
-          bitRate: 128000,
-        ),
-        path: filePath,
-      );
-
-      setState(() {
-        _isRecording = true;
-      });
+      return;
     }
+
+    // Yeni kayıt
+    if (!await _recorder.hasPermission()) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Mikrofon izni gerekli.')),
+        );
+      }
+      return;
+    }
+
+    final dir = await getTemporaryDirectory();
+    final filePath = '${dir.path}/answer_${_currentIndex + 1}.m4a';
+
+    await _recorder.start(
+      const RecordConfig(
+        encoder: AudioEncoder.aacLc,
+        sampleRate: 44100,
+        bitRate: 128000,
+      ),
+      path: filePath,
+    );
+
+    setState(() => _isRecording = true);
   }
 
   Future<void> _sendAudioToBackend(File file) async {
@@ -193,7 +191,6 @@ class _QuestionScreenState extends State<QuestionScreen> {
     try {
       final q = _currentQuestion;
 
-      // Tek endpoint: /evaluate
       final result = await ApiService.sendAudio(
         file,
         questionId: q.id,
@@ -201,23 +198,22 @@ class _QuestionScreenState extends State<QuestionScreen> {
         questionText: q.text,
       );
 
-      // Bu sorunun sonucunu sakla (ekranda hemen göstermiyoruz)
+      // Bu sorunun sonucunu sakla
       _results[_currentIndex] = result;
 
-      setState(() {
-        _isSending = false;
-      });
+      setState(() => _isSending = false);
     } catch (e) {
       setState(() => _isSending = false);
       if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Değerlendirme hatası: $e')),
       );
     }
   }
 
-  void _goNext() async {
-    // Eğer hâlâ kayıt devam ediyorsa durdurup son cevabı gönder
+  Future<void> _goNext() async {
+    // Hâlâ kayıt varsa durdurup gönder
     if (_isRecording) {
       final path = await _recorder.stop();
       setState(() => _isRecording = false);
@@ -226,31 +222,31 @@ class _QuestionScreenState extends State<QuestionScreen> {
       }
     }
 
-    // Hâlâ değerlendiriliyorsa beklet
+    // Değerlendirme devam ederken geçme
     if (_isSending) return;
 
-    // Son soruda mıyız?
+    // Son soru değilsek sonraki soruya geç
     if (_currentIndex < _questions.length - 1) {
       setState(() {
         _currentIndex++;
         _currentTranslation = null; // yeni soruda çeviri sıfırlansın
       });
 
-      // 🔊 Yeni soruya geçince otomatik sesli oku
       await _speakCurrentQuestion();
-    } else {
-      // Sınav bitti → sonuç ekranına git
-      if (!mounted) return;
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => ExamResultScreen(
-            questions: _questions,
-            results: _results,
-          ),
-        ),
-      );
+      return;
     }
+
+    // Son soruydu → sonuç ekranına git
+    if (!mounted) return;
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ExamResultScreen(
+          questions: _questions,
+          results: _results, // List<Map<String, dynamic>?>
+        ),
+      ),
+    );
   }
 
   @override
@@ -260,7 +256,8 @@ class _QuestionScreenState extends State<QuestionScreen> {
     final current = _currentIndex + 1;
 
     final isImageQuestion = q.type == 'image';
-    final hasImage = isImageQuestion && q.imageUrl != null && q.imageUrl!.isNotEmpty;
+    final hasImage =
+        isImageQuestion && q.imageUrl != null && q.imageUrl!.isNotEmpty;
 
     return Scaffold(
       appBar: AppBar(
@@ -270,7 +267,7 @@ class _QuestionScreenState extends State<QuestionScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // 🔹 ÜST KISIM: soru sayacı + soru tipi + görsel + metin
+            // 🔹 Üst kısım
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(24.0),
@@ -279,28 +276,26 @@ class _QuestionScreenState extends State<QuestionScreen> {
                   children: [
                     Text(
                       'Question $current / $total',
+                      textAlign: TextAlign.center,
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 18,
                       ),
-                      textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 4),
                     Text(
                       q.type.toUpperCase(),
+                      textAlign: TextAlign.center,
                       style: const TextStyle(
                         fontSize: 13,
                         color: Colors.grey,
                       ),
-                      textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 16),
 
                     if (hasImage) ...[
                       ConstrainedBox(
-                        constraints: const BoxConstraints(
-                          maxHeight: 260,
-                        ),
+                        constraints: const BoxConstraints(maxHeight: 260),
                         child: ClipRrectImage(url: q.imageUrl!),
                       ),
                       const SizedBox(height: 16),
@@ -312,7 +307,7 @@ class _QuestionScreenState extends State<QuestionScreen> {
                     ),
                     const SizedBox(height: 12),
 
-                    // 🔊 Sesli okuma + 🌐 Çeviri butonları
+                    // 🔊 Sesli okuma + 🌐 çeviri butonları
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
@@ -326,7 +321,9 @@ class _QuestionScreenState extends State<QuestionScreen> {
                             ? const SizedBox(
                                 width: 26,
                                 height: 26,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
                               )
                             : IconButton(
                                 icon: const Icon(Icons.translate, size: 26),
@@ -340,7 +337,7 @@ class _QuestionScreenState extends State<QuestionScreen> {
               ),
             ),
 
-            // 🔹 ALT KISIM: mic + açıklama + next butonu
+            // 🔹 Alt kısım: mic + açıklama + next
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
               child: Column(
@@ -404,7 +401,7 @@ class _QuestionScreenState extends State<QuestionScreen> {
   }
 }
 
-/// Küçük helper widget: network / asset image + border radius + graceful fallback
+/// Küçük helper widget: asset/network image + border radius + graceful fallback
 class ClipRrectImage extends StatelessWidget {
   final String url;
   const ClipRrectImage({super.key, required this.url});
@@ -416,7 +413,6 @@ class ClipRrectImage extends StatelessWidget {
     Widget child;
 
     if (_isAsset) {
-      // assets/ içinden resim
       child = Image.asset(
         url,
         fit: BoxFit.contain,
@@ -425,15 +421,12 @@ class ClipRrectImage extends StatelessWidget {
         },
       );
     } else {
-      // İleride network görsel kullanmak istersen hâlâ destekli
       child = Image.network(
         url,
         fit: BoxFit.contain,
         loadingBuilder: (context, widget, progress) {
           if (progress == null) return widget;
-          return const Center(
-            child: CircularProgressIndicator(),
-          );
+          return const Center(child: CircularProgressIndicator());
         },
         errorBuilder: (context, error, stackTrace) {
           return const _ImageErrorFallback();

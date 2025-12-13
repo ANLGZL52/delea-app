@@ -10,11 +10,9 @@ import 'package:record/record.dart';
 
 import '../models/exam_question.dart';
 import '../services/api_service.dart';
+import '../models/exam_attempt.dart';
+import '../services/history_service.dart';
 import 'exam_result_screen.dart';
-
-// 🔐 DEMO / PREMIUM kontrolü için eklenen importlar
-import '../services/plan_service.dart';
-import '../widgets/demo_limit_dialog.dart';
 
 class ImageDescriptionScreen extends StatefulWidget {
   const ImageDescriptionScreen({super.key});
@@ -30,14 +28,11 @@ class _ImageDescriptionScreenState extends State<ImageDescriptionScreen> {
   bool _isRecording = false;
   bool _isSending = false;
 
-  // 🔹 Kullanılacak resimlerin asset path listesi
   late final List<String> _imagePaths;
   int _currentIndex = 0;
 
-  // Ekranda kullanılacak İngilizce/Türkçe prompt
   static const String _imagePromptEn = "Describe this picture in detail.";
-  static const String _imagePromptTr =
-      "Bu resmi ayrıntılı bir şekilde açıklayın:";
+  static const String _imagePromptTr = "Bu resmi ayrıntılı bir şekilde açıklayın.";
 
   String get _currentImagePath => _imagePaths[_currentIndex];
 
@@ -45,47 +40,48 @@ class _ImageDescriptionScreenState extends State<ImageDescriptionScreen> {
   void initState() {
     super.initState();
 
-    // img_1.jpg ... img_14.jpg
     _imagePaths = List.generate(
       14,
       (i) => 'assets/pexels_images/img_${i + 1}.jpg',
     );
 
-    _currentIndex = 0;
-    _configureTTS();
+    _configureTts();
   }
 
-  void _configureTTS() {
+  void _configureTts() {
     _tts.setLanguage("en-US");
     _tts.setSpeechRate(0.45);
     _tts.setVolume(1.0);
     _tts.setPitch(1.0);
   }
 
-  // 🗣 Promptu sesli okut
-  void _speakPrompt() {
-    _tts.speak(_imagePromptEn);
+  @override
+  void dispose() {
+    _tts.stop();
+    _recorder.dispose();
+    super.dispose();
   }
 
-  // 🔁 Yeni resim seç
+  Future<void> _speakPrompt() async {
+    await _tts.stop();
+    await _tts.speak(_imagePromptEn);
+  }
+
   void _newImage() {
     if (_imagePaths.length <= 1) return;
 
     final rand = Random();
     int newIndex = _currentIndex;
-
-    // Aynı resme denk gelmemek için tekrar çek
     while (newIndex == _currentIndex) {
       newIndex = rand.nextInt(_imagePaths.length);
     }
 
-    setState(() {
-      _currentIndex = newIndex;
-    });
+    setState(() => _currentIndex = newIndex);
   }
 
   Future<void> _toggleRecording() async {
-    // Halihazırda kayıt varsa → durdur & gönder
+    if (_isSending) return;
+
     if (_isRecording) {
       final path = await _recorder.stop();
       setState(() => _isRecording = false);
@@ -96,23 +92,6 @@ class _ImageDescriptionScreenState extends State<ImageDescriptionScreen> {
       return;
     }
 
-    // Gönderim sırasında yeniden başlatma yok
-    if (_isSending) return;
-
-    // 🎯 DEMO / PREMIUM KONTROLÜ
-    final canUse = await PlanService.canUseFeature("image");
-    if (!canUse) {
-      if (!mounted) return;
-      showDialog(
-        context: context,
-        builder: (_) => const DemoLimitDialog(
-          featureName: "Image Description",
-        ),
-      );
-      return;
-    }
-
-    // Mikrofon izni
     if (!await _recorder.hasPermission()) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -122,7 +101,8 @@ class _ImageDescriptionScreenState extends State<ImageDescriptionScreen> {
     }
 
     final dir = await getTemporaryDirectory();
-    final filePath = '${dir.path}/image_description.m4a';
+    final ts = DateTime.now().millisecondsSinceEpoch;
+    final filePath = '${dir.path}/image_desc_$ts.m4a';
 
     await _recorder.start(
       const RecordConfig(
@@ -133,9 +113,6 @@ class _ImageDescriptionScreenState extends State<ImageDescriptionScreen> {
       path: filePath,
     );
 
-    // ✔ Kullanım hakkını kaydet → bugün için bu sekmeden sadece 1 kayıt
-    await PlanService.registerUsage("image");
-
     setState(() => _isRecording = true);
   }
 
@@ -143,19 +120,25 @@ class _ImageDescriptionScreenState extends State<ImageDescriptionScreen> {
     setState(() => _isSending = true);
 
     try {
-      // Backend'e ses + prompt gönder
       final result = await ApiService.sendImageAudio(
         file,
         _imagePromptEn,
       );
 
-      // Sonuç ekranı için soru objesi
       final examQuestion = ExamQuestion(
         id: 'img_${_currentIndex + 1}',
         type: 'image',
         text: _imagePromptEn,
         imageUrl: _currentImagePath,
       );
+
+      // Geçmişe kaydet
+      final attempt = ExamAttempt.fromQuestionResult(
+        question: examQuestion,
+        type: 'image',
+        result: result,
+      );
+      await HistoryService.addAttempt(attempt);
 
       if (!mounted) return;
       Navigator.push(
@@ -168,83 +151,117 @@ class _ImageDescriptionScreenState extends State<ImageDescriptionScreen> {
         ),
       );
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Değerlendirme hatası: $e")),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Değerlendirme hatası: $e")),
+        );
+      }
     }
 
+    if (!mounted) return;
     setState(() => _isSending = false);
   }
 
   @override
   Widget build(BuildContext context) {
+    const bg = Color(0xFF0B1020);
+
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: bg,
       appBar: AppBar(
-        title: const Text("Resim Açıklama"),
-        backgroundColor: Colors.black,
+        title: const Text("Image"),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        actions: [
+          IconButton(
+            onPressed: _isSending ? null : _newImage,
+            icon: const Icon(Icons.shuffle),
+            tooltip: "Yeni Resim",
+          ),
+        ],
       ),
       body: SafeArea(
         child: Column(
           children: [
-            // 🔹 Başlık + prompt + SESLİ OKUMA BUTONU
+            // ÜST KART
             Container(
-              margin: const EdgeInsets.all(16),
-              padding: const EdgeInsets.all(18),
+              margin: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.grey.shade900,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.tealAccent.withOpacity(0.4),
-                    blurRadius: 15,
-                  ),
-                ],
+                color: const Color(0xFF0F172A),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: const Color(0xFF1E293B)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.image_outlined,
-                          color: Colors.tealAccent),
-                      const SizedBox(width: 6),
-                      const Text(
-                        "Resim Açıklama",
-                        style: TextStyle(
-                          color: Colors.tealAccent,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.tealAccent.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(color: Colors.tealAccent.withOpacity(0.35)),
+                        ),
+                        child: const Text(
+                          "IMAGE",
+                          style: TextStyle(
+                            color: Colors.tealAccent,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 12,
+                            letterSpacing: 0.5,
+                          ),
                         ),
                       ),
                       const Spacer(),
                       IconButton(
-                        icon:
-                            const Icon(Icons.volume_up, color: Colors.white),
+                        icon: const Icon(Icons.volume_up),
+                        color: Colors.white,
                         onPressed: _speakPrompt,
+                        tooltip: "Prompt'u sesli oku",
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 10),
                   const Text(
                     _imagePromptTr,
-                    style: TextStyle(color: Colors.white, fontSize: 16),
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      height: 1.35,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    "İpucu: Overview (1) → Details (3) → Inference (1).",
+                    style: TextStyle(color: Colors.white54, fontSize: 12),
                   ),
                 ],
               ),
             ),
 
-            // 🖼 Resim: ekranın kalan dikey alanını doldurur, taşmaz
+            // RESİM
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16.0),
                 child: ClipRRect(
-                  borderRadius: BorderRadius.circular(18),
-                  child: SizedBox.expand(
+                  borderRadius: BorderRadius.circular(20),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: const Color(0xFF1E293B)),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
                     child: Image.asset(
                       _currentImagePath,
                       fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => const Center(
+                        child: Text(
+                          "Görsel yüklenemedi.",
+                          style: TextStyle(color: Colors.white70),
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -253,56 +270,64 @@ class _ImageDescriptionScreenState extends State<ImageDescriptionScreen> {
 
             const SizedBox(height: 12),
 
-            // 🔁 Yeni Resim butonu
+            // STATUS
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton.icon(
-                  onPressed: _isSending ? null : _newImage,
-                  icon: const Icon(Icons.refresh),
-                  label: const Text(
-                    "Yeni Resim",
-                    style: TextStyle(fontSize: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  Icon(
+                    _isRecording ? Icons.fiber_manual_record : Icons.info_outline,
+                    color: _isRecording ? Colors.redAccent : Colors.white54,
+                    size: 18,
                   ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF22C55E),
-                    foregroundColor: Colors.black,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _isSending
+                          ? "Cevabın değerlendiriliyor..."
+                          : _isRecording
+                              ? "Kayıt alınıyor, bitirmek için tekrar dokun."
+                              : "Mikrofona dokun ve cevabını kaydet.",
+                      style: const TextStyle(color: Colors.white54, fontSize: 12),
                     ),
                   ),
-                ),
+                ],
               ),
             ),
 
-            const SizedBox(height: 16),
+            const SizedBox(height: 10),
 
-            // 🎙 Mikrofon
+            // MIC
             GestureDetector(
-              onTap: _isSending ? null : _toggleRecording,
-              child: Container(
-                margin: const EdgeInsets.only(bottom: 24),
-                width: 90,
-                height: 90,
+              onTap: _toggleRecording,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                margin: const EdgeInsets.only(bottom: 20),
+                width: 86,
+                height: 86,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: _isRecording ? Colors.red : Colors.tealAccent,
+                  color: _isRecording ? Colors.redAccent : Colors.tealAccent,
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.tealAccent.withOpacity(0.4),
-                      blurRadius: 10,
+                      color: (_isRecording ? Colors.redAccent : Colors.tealAccent)
+                          .withOpacity(0.35),
+                      blurRadius: 14,
+                      offset: const Offset(0, 6),
                     ),
                   ],
                 ),
-                child: const Icon(Icons.mic, size: 40, color: Colors.black),
+                child: Icon(
+                  _isRecording ? Icons.stop_rounded : Icons.mic_rounded,
+                  size: 40,
+                  color: Colors.black,
+                ),
               ),
             ),
 
             if (_isSending)
               const Padding(
-                padding: EdgeInsets.only(bottom: 20),
+                padding: EdgeInsets.only(bottom: 18),
                 child: CircularProgressIndicator(color: Colors.tealAccent),
               ),
           ],

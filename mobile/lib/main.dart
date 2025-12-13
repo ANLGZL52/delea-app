@@ -1,32 +1,54 @@
+// lib/screens/main_home_screen.dart
 import 'package:flutter/material.dart';
-import 'screens/main_home_screen.dart';
-import 'screens/premium_screen.dart';
-import 'services/purchase_service.dart';
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+import 'home_screen.dart';
+import 'profile_screen.dart';
+import 'performance_screen.dart';
 
-  // Satın alma servisini başlat
-  await PurchaseService.instance.init();
+class MainHomeScreen extends StatefulWidget {
+  const MainHomeScreen({super.key});
 
-  runApp(const DeleaApp());
+  @override
+  State<MainHomeScreen> createState() => _MainHomeScreenState();
 }
 
-class DeleaApp extends StatelessWidget {
-  const DeleaApp({super.key});
+class _MainHomeScreenState extends State<MainHomeScreen> {
+  int _index = 0;
+
+  final _pages = const [
+    HomeScreen(),
+    PerformanceScreen(),
+    ProfileScreen(),
+  ];
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'DeLeA – DLA Exam Trainer',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData.dark(useMaterial3: true).copyWith(
-        scaffoldBackgroundColor: const Color(0xFF050509),
+    return Scaffold(
+      backgroundColor: const Color(0xFF0B1020),
+      body: _pages[_index],
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _index,
+        onDestinationSelected: (i) => setState(() => _index = i),
+        backgroundColor: const Color(0xFF0F172A),
+        indicatorColor: Colors.white.withOpacity(0.10),
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.home_outlined),
+            selectedIcon: Icon(Icons.home),
+            label: "Home",
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.insights_outlined),
+            selectedIcon: Icon(Icons.insights),
+            label: "Performance",
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.person_outline),
+            selectedIcon: Icon(Icons.person),
+            label: "Profile",
+          ),
+        ],
       ),
-      home: const MainHomeScreen(),
-      routes: {
-        '/premium': (_) => const PremiumScreen(),
-      },
     );
   }
 }

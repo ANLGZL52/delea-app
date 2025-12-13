@@ -10,11 +10,9 @@ import 'package:record/record.dart';
 import '../services/api_service.dart';
 import '../models/exam_question.dart';
 import '../data/exam_question_bank.dart';
+import '../models/exam_attempt.dart';
+import '../services/history_service.dart';
 import 'exam_result_screen.dart';
-
-// 🔐 DEMO / PREMIUM kontrolü için eklenen importlar
-import '../services/plan_service.dart';
-import '../widgets/demo_limit_dialog.dart';
 
 class GeneralQuestionsScreen extends StatefulWidget {
   const GeneralQuestionsScreen({super.key});
@@ -29,12 +27,11 @@ class _GeneralQuestionsScreenState extends State<GeneralQuestionsScreen> {
 
   bool _isRecording = false;
   bool _isSending = false;
+  bool _isTranslating = false;
 
-  // 🔹 Tüm genel sorular havuzu
   late final List<ExamQuestion> _generalQuestions;
   int _currentIndex = 0;
 
-  // Çevrilmiş hali
   String? _translatedQuestion;
 
   ExamQuestion get _currentQuestion => _generalQuestions[_currentIndex];
@@ -54,37 +51,53 @@ class _GeneralQuestionsScreenState extends State<GeneralQuestionsScreen> {
     _tts.setPitch(1.0);
   }
 
-  void _speak() {
-    _tts.speak(_questionText);
+  @override
+  void dispose() {
+    _tts.stop();
+    _recorder.dispose();
+    super.dispose();
+  }
+
+  Future<void> _speak() async {
+    await _tts.stop();
+    await _tts.speak(_questionText);
   }
 
   Future<void> _translate() async {
+    if (_isTranslating) return;
+
+    // zaten çevrildiyse dialog gibi göstermek yerine alanı koruyoruz
+    setState(() => _isTranslating = true);
+
     try {
       final translated =
           await ApiService.translateQuestion(_questionText, targetLang: "tr");
+      if (!mounted) return;
 
       setState(() {
         _translatedQuestion = translated;
+        _isTranslating = false;
       });
     } catch (e) {
       if (!mounted) return;
+      setState(() => _isTranslating = false);
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Çeviri alınırken hata: $e")),
       );
     }
   }
 
-  /// 🔄 Yeni soru: havuzdaki bir SONRAKİ soruya geç
-  Future<void> _newQuestion() async {
+  void _newQuestion() {
     setState(() {
-      _currentIndex =
-          (_currentIndex + 1) % _generalQuestions.length; // sona gelince başa dön
-      _translatedQuestion = null; // her yeni soruda çeviriyi sıfırla
+      _currentIndex = (_currentIndex + 1) % _generalQuestions.length;
+      _translatedQuestion = null;
     });
   }
 
   Future<void> _toggleRecording() async {
-    // Eğer şu anda kayıttaysak → kaydı durdur
+    if (_isSending) return;
+
     if (_isRecording) {
       final path = await _recorder.stop();
       setState(() => _isRecording = false);
@@ -95,23 +108,6 @@ class _GeneralQuestionsScreenState extends State<GeneralQuestionsScreen> {
       return;
     }
 
-    // Gönderim sırasında yeniden başlatma izni verme
-    if (_isSending) return;
-
-    // 🎯 DEMO / PREMIUM KONTROLÜ
-    final canUse = await PlanService.canUseFeature("general");
-    if (!canUse) {
-      if (!mounted) return;
-      showDialog(
-        context: context,
-        builder: (_) => const DemoLimitDialog(
-          featureName: "General Questions",
-        ),
-      );
-      return;
-    }
-
-    // Mikrofon izni
     if (!await _recorder.hasPermission()) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -121,7 +117,8 @@ class _GeneralQuestionsScreenState extends State<GeneralQuestionsScreen> {
     }
 
     final dir = await getTemporaryDirectory();
-    final filePath = '${dir.path}/general_question.m4a';
+    final ts = DateTime.now().millisecondsSinceEpoch;
+    final filePath = '${dir.path}/general_$ts.m4a';
 
     await _recorder.start(
       const RecordConfig(
@@ -132,9 +129,6 @@ class _GeneralQuestionsScreenState extends State<GeneralQuestionsScreen> {
       path: filePath,
     );
 
-    // ✔ Kullanım hakkını kaydet → bugün için bu sekmeden sadece 1 kayıt
-    await PlanService.registerUsage("general");
-
     setState(() => _isRecording = true);
   }
 
@@ -143,11 +137,19 @@ class _GeneralQuestionsScreenState extends State<GeneralQuestionsScreen> {
 
     try {
       final result = await ApiService.sendGeneralAudio(file);
-
-      // 🔹 Sorunun kendisini, soru ID/type ile birlikte gönderiyoruz
       final examQuestion = _currentQuestion;
 
+      // geçmişe kaydet
+      final attempt = ExamAttempt.fromQuestionResult(
+        question: examQuestion,
+        type: 'general',
+        result: result,
+      );
+      await HistoryService.addAttempt(attempt);
+
       if (!mounted) return;
+
+      // sonuç ekranı
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -158,87 +160,129 @@ class _GeneralQuestionsScreenState extends State<GeneralQuestionsScreen> {
         ),
       );
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Değerlendirme hatası: $e")),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Değerlendirme hatası: $e")),
+        );
+      }
     }
 
+    if (!mounted) return;
     setState(() => _isSending = false);
   }
 
   @override
   Widget build(BuildContext context) {
+    const bg = Color(0xFF0B1020);
+
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: bg,
       appBar: AppBar(
-        title: const Text("Genel Sorular"),
-        backgroundColor: Colors.black,
+        title: const Text("General"),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        actions: [
+          IconButton(
+            onPressed: _newQuestion,
+            icon: const Icon(Icons.shuffle),
+            tooltip: "Yeni Soru",
+          ),
+        ],
       ),
       body: SafeArea(
         child: Column(
           children: [
-            // 🟩 Soru kartı
+            // Question Card
             Container(
-              margin: const EdgeInsets.all(16),
-              padding: const EdgeInsets.all(18),
+              margin: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.grey.shade900,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.greenAccent.withOpacity(0.4),
-                    blurRadius: 15,
-                  ),
-                ],
+                color: const Color(0xFF0F172A),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: const Color(0xFF1E293B)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // top row: label + actions
                   Row(
                     children: [
-                      const Icon(Icons.chat, color: Colors.greenAccent),
-                      const SizedBox(width: 6),
-                      const Text(
-                        "Soru",
-                        style: TextStyle(
-                          color: Colors.greenAccent,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.greenAccent.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(
+                            color: Colors.greenAccent.withOpacity(0.35),
+                          ),
+                        ),
+                        child: const Text(
+                          "GENERAL",
+                          style: TextStyle(
+                            color: Colors.greenAccent,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 12,
+                            letterSpacing: 0.5,
+                          ),
                         ),
                       ),
                       const Spacer(),
-                      // Sesli okutma
                       IconButton(
-                        icon: const Icon(Icons.volume_up, color: Colors.white),
+                        icon: const Icon(Icons.volume_up),
+                        color: Colors.white,
                         onPressed: _speak,
+                        tooltip: "Soruyu sesli oku",
                       ),
-                      // Çeviri
-                      IconButton(
-                        icon: const Icon(Icons.translate,
-                            color: Colors.greenAccent),
-                        onPressed: _translate,
-                      ),
+                      _isTranslating
+                          ? const Padding(
+                              padding: EdgeInsets.only(right: 10),
+                              child: SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                            )
+                          : IconButton(
+                              icon: const Icon(Icons.translate),
+                              color: Colors.greenAccent,
+                              onPressed: _translate,
+                              tooltip: "Türkçe çeviri",
+                            ),
                     ],
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 10),
+
                   Text(
                     _questionText,
-                    style: const TextStyle(color: Colors.white, fontSize: 17),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 17,
+                      height: 1.35,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
+
                   if (_translatedQuestion != null) ...[
                     const SizedBox(height: 12),
                     Container(
+                      width: double.infinity,
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.green.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(10),
+                        color: Colors.greenAccent.withOpacity(0.10),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: Colors.greenAccent.withOpacity(0.25),
+                        ),
                       ),
                       child: Text(
                         _translatedQuestion!,
                         style: const TextStyle(
-                          fontSize: 16,
-                          color: Colors.greenAccent,
+                          fontSize: 15,
+                          color: Colors.white70,
+                          height: 1.35,
                         ),
                       ),
                     ),
@@ -247,42 +291,66 @@ class _GeneralQuestionsScreenState extends State<GeneralQuestionsScreen> {
               ),
             ),
 
-            // 🔁 Yeni soru düğmesi
-            TextButton.icon(
-              onPressed: _newQuestion,
-              icon: const Icon(Icons.refresh, color: Colors.greenAccent),
-              label: const Text(
-                "Yeni Soru",
-                style: TextStyle(color: Colors.greenAccent, fontSize: 16),
+            const SizedBox(height: 6),
+
+            // hint / status
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  Icon(
+                    _isRecording ? Icons.fiber_manual_record : Icons.info_outline,
+                    color: _isRecording ? Colors.redAccent : Colors.white54,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _isSending
+                          ? "Cevabın değerlendiriliyor..."
+                          : _isRecording
+                              ? "Kayıt alınıyor, bitirmek için tekrar dokun."
+                              : "Mikrofona dokun ve cevabını kaydet.",
+                      style: const TextStyle(color: Colors.white54, fontSize: 12),
+                    ),
+                  ),
+                ],
               ),
             ),
 
             const Spacer(),
 
-            // 🎙 Mikrofon
+            // mic button
             GestureDetector(
-              onTap: _isSending ? null : _toggleRecording,
-              child: Container(
-                margin: const EdgeInsets.only(bottom: 40),
-                width: 90,
-                height: 90,
+              onTap: _toggleRecording,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                margin: const EdgeInsets.only(bottom: 26),
+                width: 86,
+                height: 86,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: _isRecording ? Colors.red : Colors.greenAccent,
+                  color: _isRecording ? Colors.redAccent : Colors.greenAccent,
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.greenAccent.withOpacity(0.4),
-                      blurRadius: 10,
+                      color: (_isRecording ? Colors.redAccent : Colors.greenAccent)
+                          .withOpacity(0.35),
+                      blurRadius: 14,
+                      offset: const Offset(0, 6),
                     ),
                   ],
                 ),
-                child: const Icon(Icons.mic, size: 40, color: Colors.black),
+                child: Icon(
+                  _isRecording ? Icons.stop_rounded : Icons.mic_rounded,
+                  size: 40,
+                  color: Colors.black,
+                ),
               ),
             ),
 
             if (_isSending)
               const Padding(
-                padding: EdgeInsets.only(bottom: 25),
+                padding: EdgeInsets.only(bottom: 18),
                 child: CircularProgressIndicator(color: Colors.greenAccent),
               ),
           ],
