@@ -1,26 +1,30 @@
-# DLA+ — iOS: Codemagic. App Store Connect entegrasyonunu arayüzde bağla (API key, imza).
-# Kök: delea-app, Flutter: mobile/
+# DLA+ iOS build — Klon kökü = repo kökü; Flutter: mobile/
+# Codemagic UI: "Repository" altında EK working directory KULLANMA (veya sadece ./).
+# İmzalama + TestFlight: https://docs.codemagic.io/flutter-publishing/publishing-to-app-store/
 workflows:
   ios-workflow:
     name: DLA+ iOS
     max_build_duration: 120
     instance_type: mac_mini_m1
     environment:
+      flutter: stable
       xcode: latest
+      # ios_signing: App bölümünde "iOS code signing" ile Otomatik veya
+      # App Store Connect API + bundle com.delea.app
     scripts:
       - name: Get packages & CocoaPods
         script: |
           set -e
-          cd mobile
+          cd "$CM_BUILD_DIR/mobile"
           flutter pub get
           cd ios
           pod install
       - name: Flutter build IPA
         script: |
           set -e
-          cd mobile
+          cd "$CM_BUILD_DIR/mobile"
           flutter build ipa --release
     artifacts:
       - mobile/build/ios/ipa/*.ipa
-    # publishing: App Store Connect bölümünü Codemagic uygulama ayarlarından
-    # (TestFlight / Production) aç: API key + bundle id com.delea.app
+    # publishing: UI → App settings → iOS code signing + Distribution: App Store
+    # → App Store Connect (TestFlight) integration
