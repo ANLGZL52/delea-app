@@ -1,16 +1,24 @@
-# mobile
+# DLA+ (Flutter)
 
-A new Flutter project.
+Kabin mülakatı / DLA İngilizce konuşma pratiği uygulaması.
 
-## Getting Started
+## Firebase, web yayını ve alan adı
 
-This project is a starting point for a Flutter application.
+Prod Firebase projesi, Hosting ve özel domain adımları: **[../docs/FIREBASE_VE_ALAN_ADI.md](../docs/FIREBASE_VE_ALAN_ADI.md)**
 
-A few resources to get you started if this is your first Flutter project:
+Hızlı başlat (kendi Firebase projeni bağlamak):
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+```bash
+dart pub global activate flutterfire_cli
+flutterfire configure
+```
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## API adresi (geliştirme / cihaz)
+
+`lib/services/api_service.dart` ve `--dart-define=API_BASE_URL=...` (detay aynı dokümantasyonda).
+
+## Google Play: release imzası (AAB)
+
+1. `android` klasöründe: `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass` ardından `.\create_play_upload_keystore.ps1` (sifre sorar; `delea-upload-key.jks` + `key.properties` olusur; ikisini de git'e ekleme).
+2. Ustte `mobile`: `flutter build appbundle --release`
+3. Cikis: `build/app/outputs/bundle/release/app-release.aab` — yukleme sifren; `.jks` yedegi sart.

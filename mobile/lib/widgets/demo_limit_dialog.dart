@@ -2,6 +2,9 @@
 
 import 'package:flutter/material.dart';
 
+import '../theme/delea_tokens.dart';
+import '../screens/premium_screen.dart';
+
 class DemoLimitDialog extends StatelessWidget {
   final String featureName;
 
@@ -10,24 +13,50 @@ class DemoLimitDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text("Demo hakkın doldu"),
+      backgroundColor: DeleaColors.backgroundCard,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: const BorderSide(color: DeleaColors.border),
+      ),
+      title: Text(
+        "Ücretsiz planda sınır",
+        style: Theme.of(context).textTheme.titleLarge,
+      ),
       content: Text(
-        "Demo sürümünde '$featureName' bölümünü günde yalnızca 1 kez kullanabilirsin.\n\n"
-        "Sınırsız kullanım için Premium'a geçebilirsin.",
+        "Demo hesapta (\"$featureName\") bölümünde bu cihazda toplam bir değerlendirme hakkın vardı; bu hak kullanıldı.\n\n"
+        "Tüm pratik alanları ve sınav simülasyonu için Premium’a geçebilirsin.",
+        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+              color: DeleaColors.textSecondary,
+            ),
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text("Kapat"),
+          child: Text("Kapat", style: TextStyle(color: DeleaColors.textMuted)),
         ),
-        TextButton(
+        FilledButton.tonal(
           onPressed: () {
             Navigator.of(context).pop();
-            Navigator.pushNamed(context, "/premium");
+            Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const PremiumScreen(),
+              ),
+            );
           },
-          child: const Text("Premium'a Geç"),
+          child: const Text("Planları gör"),
         ),
       ],
     );
   }
+}
+
+/// Demo kotası dolduğunda — [PlanService.canUseFeature] ile uyumlu metin.
+Future<void> showPlanLimitDialog(
+  BuildContext context, {
+  String featureName = "Bu bölüm",
+}) {
+  return showDialog<void>(
+    context: context,
+    builder: (_) => DemoLimitDialog(featureName: featureName),
+  );
 }

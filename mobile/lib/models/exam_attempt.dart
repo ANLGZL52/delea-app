@@ -52,7 +52,16 @@ class ExamAttempt {
   }) {
     final now = DateTime.now();
 
-    final rawScore = result['overall_score'] ?? result['score'];
+    num? fromNested;
+    final sc = result['scores'];
+    if (sc is Map) {
+      final o = sc['overall'];
+      if (o is num) fromNested = o;
+    }
+    final rawScore = fromNested ??
+        result['overall_score'] ??
+        result['score'] ??
+        result['grade'];
     double? score;
     if (rawScore is num) {
       score = rawScore.toDouble();
@@ -60,14 +69,22 @@ class ExamAttempt {
       score = double.tryParse(rawScore);
     }
 
-    final rawFb =
-        result['overall_feedback'] ?? result['feedback'] ?? result['comment'];
-
     String? feedback;
-    if (rawFb is String) {
-      feedback = rawFb;
-    } else if (rawFb != null) {
-      feedback = rawFb.toString();
+    if (result['overall_feedback'] is String) {
+      feedback = (result['overall_feedback'] as String).trim();
+    } else if (result['comment'] is String) {
+      feedback = (result['comment'] as String).trim();
+    } else {
+      final fb = result['feedback'];
+      if (fb is String) {
+        feedback = fb.trim();
+      } else if (fb is Map) {
+        final oc = fb['overall_comment'];
+        if (oc != null) feedback = oc.toString();
+      } else {
+        final rawFb = result['overall_feedback'] ?? result['comment'];
+        if (rawFb != null) feedback = rawFb.toString();
+      }
     }
 
     return ExamAttempt(

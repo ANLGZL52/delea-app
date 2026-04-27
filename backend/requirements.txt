@@ -1,3 +1,9 @@
 fastapi
 uvicorn
 python-multipart
+python-dotenv
+openai
+sqlalchemy[asyncio]
+asyncpg
+google-api-python-client
+google-auth

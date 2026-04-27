@@ -1,7 +1,8 @@
+import 'dart:math';
+
+import 'exam_image_assets.dart';
 import '../models/exam_question.dart';
 // lib/data/exam_question_bank.dart
-
-import 'dart:math';
 
 class ExamQuestionBank {
  // 2 sabit giriş sorusu (15 sn)
@@ -1661,30 +1662,50 @@ static const String imageQuestionPrompt =
     'the place, the people (if any), their expressions, their body language, '
     'and the surroundings.';
 
-// assets/pexels_images klasöründe kaç tane img_X.jpg olduğunu burada belirt
-// Şu an sende 80 görsel var: img_1.jpg ... img_80.jpg
-static const int _localImageCount = 80;
-
-// Verilen index için uygun asset yolunu döndürür.
-// 1.._localImageCount arası direkt kullanılır,
-// üstü gelirse (81-100 gibi) 1-80 arasında döngüsel tekrar eder.
+// Görsel yolları: `ExamImageAssets` ile aynı havuz (her img_X farklı dosya).
+// Verilen 1..N indisi için asset yolu; havuz sınırında güvenli sarmal.
 static String _assetPathForImageIndex(int index) {
-  final wrappedIndex = ((index - 1) % _localImageCount) + 1;
-  return 'assets/pexels_images/img_$wrappedIndex.jpg';
+  final n = ((index - 1) % ExamImageAssets.count) + 1;
+  return ExamImageAssets.pathForIndex1Based(n);
 }
 
-// 100 görsel sorusunu dinamik şekilde üret
 static final List<ExamQuestion> imageQuestions =
-    List<ExamQuestion>.generate(100, (index) {
+    List<ExamQuestion>.generate(ExamImageAssets.count, (index) {
   final int questionNumber = index + 1;
-
   return ExamQuestion(
     id: 'img_$questionNumber',
     type: 'image',
     text: imageQuestionPrompt,
-    imageUrl: _assetPathForImageIndex(questionNumber),
+    imageUrl: ExamImageAssets.pathForIndex1Based(questionNumber),
   );
 });
+
+/// Benzersiz görseller kullanarak image soruları seçer.
+/// Aynı sınavda aynı görsel tekrar etmez.
+static List<ExamQuestion> _pickUniqueImageQuestions(int count, Random rnd) {
+  if (count <= 0) return [];
+
+  // 1..[ExamImageAssets.count] benzersiz indeks
+  final indices = List<int>.generate(ExamImageAssets.count, (i) => i + 1);
+  indices.shuffle(rnd);
+
+  final take = count.clamp(0, indices.length);
+  final selected = indices.take(take).toList();
+
+  return selected
+      .asMap()
+      .map((i, idx) => MapEntry(
+            i,
+            ExamQuestion(
+              id: 'img_${idx}_$i',
+              type: 'image',
+              text: imageQuestionPrompt,
+              imageUrl: _assetPathForImageIndex(idx),
+            ),
+          ))
+      .values
+      .toList();
+}
   // ==========================
   // SENARYO SORULARI (20 ADET)
   // ==========================
@@ -2301,9 +2322,9 @@ static final List<ExamQuestion> imageQuestions =
     final intro = introQuestions.take(introCount).toList();
     exam.addAll(intro);
 
-    // 2) Diğer tiplerden rastgele seçim
+    // 2) Diğer tiplerden rastgele seçim (görseller benzersiz olacak şekilde)
     exam.addAll(_pickRandom(generalQuestions, generalCount, rnd));
-    exam.addAll(_pickRandom(imageQuestions, imageCount, rnd));
+    exam.addAll(_pickUniqueImageQuestions(imageCount, rnd));
     exam.addAll(_pickRandom(scenarioQuestions, scenarioCount, rnd));
 
     // 3) Intro soruları başta sabit kalsın, geri kalan karışsın

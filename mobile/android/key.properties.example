@@ -1,0 +1,14 @@
+# 1) `create_play_upload_keystore.ps1` = delea-upload-key.jks + alias delea (otomatik)
+# 2) Baska projenin jks'ini kullan: android/ altina kopyala, ornek:
+#    storeFile=upload-keystore.jks
+#    keyAlias=upload
+# 3) key.properties + *.jks = .gitignore, commit yok
+
+# Keystore olustur (manuel):
+#   cd android
+#   keytool -genkeypair -v -keystore delea-upload-key.jks -alias delea -keyalg RSA -keysize 2048 -validity 10000 -storetype JKS -dname "CN=DLA Plus, OU=Mobile, O=DLA, C=TR"
+
+storePassword=BURAYA_KESTORE_SIFRESI
+keyPassword=AYNI_VEYA_ANAHTAR_SIFRESI
+keyAlias=delea
+storeFile=delea-upload-key.jks

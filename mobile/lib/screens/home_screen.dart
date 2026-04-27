@@ -46,7 +46,7 @@ class HomeScreen extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text("DeLeA"),
+        title: const Text("DLA +"),
         centerTitle: true,
         actions: [
           IconButton(

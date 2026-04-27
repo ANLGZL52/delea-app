@@ -1,52 +1,49 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
 class PlanService {
-  // Premium anahtarı
   static const String _keyIsPremium = "is_premium";
+  /// Android/iOS sunucu doğrulamasından (expires_at_ms); yoksa sadece bayrak.
+  static const String _keyPremiumExpiresAtMs = "premium_expires_at_ms";
 
-  // Günlük reset anahtarı
-  static const String _keyLastReset = "usage_last_reset";
-
-  // Her feature için kullanım sayaçları
+  // Demo: her pratik türü için cihazda toplam 1 başarılı değerlendirme; günlük sıfırlama yok
   static const String _keyGeneral = "usage_general";
   static const String _keyScenario = "usage_scenario";
   static const String _keyImage = "usage_image";
   static const String _keyExam = "usage_exam";
 
-  // Demo limiti: her feature için günde sadece 1 kez
-  static const int dailyLimit = 1;
+  static const int demoLimitPerFeature = 1;
 
-  /// Kullanıcı premium mu?
   static Future<bool> isPremium() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool(_keyIsPremium) ?? false;
+    if (!(prefs.getBool(_keyIsPremium) ?? false)) return false;
+    final exp = prefs.getInt(_keyPremiumExpiresAtMs);
+    if (exp != null) {
+      if (DateTime.now().millisecondsSinceEpoch > exp) {
+        await clearPremium();
+        return false;
+      }
+    }
+    return true;
   }
 
-  /// Kullanıcıyı premium yap
-  static Future<void> setPremium() async {
+  /// [expiresAtMs] sunucudan (Play/App Store dönem sonu); yoksa yenileme olana kadar premium varsayılır.
+  static Future<void> setPremium({int? expiresAtMs}) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_keyIsPremium, true);
+    if (expiresAtMs != null) {
+      await prefs.setInt(_keyPremiumExpiresAtMs, expiresAtMs);
+    } else {
+      await prefs.remove(_keyPremiumExpiresAtMs);
+    }
     await resetAllUsage();
   }
 
-  /// Gerekirse günlük sayaç reseti yap
-  static Future<void> _resetIfNeeded() async {
+  static Future<void> clearPremium() async {
     final prefs = await SharedPreferences.getInstance();
-    final today = DateTime.now().toString().substring(0, 10);
-    final lastReset = prefs.getString(_keyLastReset);
-
-    // İlk kez çalışıyorsa veya gün değişmişse reset yapılır
-    if (lastReset != today) {
-      await prefs.setString(_keyLastReset, today);
-
-      await prefs.setInt(_keyGeneral, 0);
-      await prefs.setInt(_keyScenario, 0);
-      await prefs.setInt(_keyImage, 0);
-      await prefs.setInt(_keyExam, 0);
-    }
+    await prefs.setBool(_keyIsPremium, false);
+    await prefs.remove(_keyPremiumExpiresAtMs);
   }
 
-  /// Feature usage key mapping
   static String _featureKey(String f) {
     switch (f) {
       case "general":
@@ -62,41 +59,30 @@ class PlanService {
     }
   }
 
-  /// Feature'ın bugün kaç defa kullanıldığını getir
   static Future<int> _getUsage(String key) async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getInt(key) ?? 0;
   }
 
-  /// Kullanım kaydı arttırma
   static Future<void> _incrementUsage(String key) async {
     final prefs = await SharedPreferences.getInstance();
     final current = prefs.getInt(key) ?? 0;
     await prefs.setInt(key, current + 1);
   }
 
-  /// Feature'ı kullanabilir mi?
+  /// Ücretsiz planda: her bölümden (genel, senaryo, resim) toplam [demoLimitPerFeature] kullanım. Premium: sınırsız.
   static Future<bool> canUseFeature(String feature) async {
-    await _resetIfNeeded();
-
-    // Premium ise sonsuz kullanım
     if (await isPremium()) return true;
-
-    // Değilse sayaç kontrolü
     final key = _featureKey(feature);
     final used = await _getUsage(key);
-
-    return used < dailyLimit;
+    return used < demoLimitPerFeature;
   }
 
-  /// Kullanım kaydı
   static Future<void> registerUsage(String feature) async {
-    await _resetIfNeeded();
     final key = _featureKey(feature);
     await _incrementUsage(key);
   }
 
-  /// Premium geçişi veya reset durumunda tüm sayaçları sıfırla
   static Future<void> resetAllUsage() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_keyGeneral, 0);

@@ -1,0 +1,26 @@
+# DLA+ — iOS: Codemagic. App Store Connect entegrasyonunu arayüzde bağla (API key, imza).
+# Kök: delea-app, Flutter: mobile/
+workflows:
+  ios-workflow:
+    name: DLA+ iOS
+    max_build_duration: 120
+    instance_type: mac_mini_m1
+    environment:
+      xcode: latest
+    scripts:
+      - name: Get packages & CocoaPods
+        script: |
+          set -e
+          cd mobile
+          flutter pub get
+          cd ios
+          pod install
+      - name: Flutter build IPA
+        script: |
+          set -e
+          cd mobile
+          flutter build ipa --release
+    artifacts:
+      - mobile/build/ios/ipa/*.ipa
+    # publishing: App Store Connect bölümünü Codemagic uygulama ayarlarından
+    # (TestFlight / Production) aç: API key + bundle id com.delea.app

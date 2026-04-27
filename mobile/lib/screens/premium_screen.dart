@@ -19,7 +19,12 @@ class _PremiumScreenState extends State<PremiumScreen> {
   @override
   void initState() {
     super.initState();
-    _loadPlan();
+    _bootstrap();
+  }
+
+  Future<void> _bootstrap() async {
+    await PurchaseService.instance.init();
+    await _loadPlan();
   }
 
   Future<void> _loadPlan() async {
@@ -86,7 +91,6 @@ class _PremiumScreenState extends State<PremiumScreen> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      backgroundColor: const Color(0xFF020617),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,

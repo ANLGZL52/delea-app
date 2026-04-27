@@ -1,41 +1,86 @@
 # app/main.py
+import logging
 import os
 import json
 import tempfile
-from typing import Dict, Optional
+from contextlib import asynccontextmanager
+from typing import Dict, List, Optional
+import asyncio
+
+from dotenv import load_dotenv
+load_dotenv()
 
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from openai import OpenAI
 
-# ------------------------------------------------------
-# OPENAI CLIENT
-# ------------------------------------------------------
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-if not OPENAI_API_KEY:
-    raise RuntimeError("OPENAI_API_KEY environment variable is not set.")
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-client = OpenAI(api_key=OPENAI_API_KEY)
+# ------------------------------------------------------
+# OPENAI (tembel yükleme — /health OPENAI olmadan çalışır)
+# ------------------------------------------------------
+_openai: Optional[OpenAI] = None
+
+
+def get_openai_client() -> OpenAI:
+    global _openai
+    if _openai is None:
+        key = (os.getenv("OPENAI_API_KEY") or "").strip()
+        if not key:
+            raise HTTPException(
+                status_code=503,
+                detail="OpenAI is not configured (set OPENAI_API_KEY).",
+            )
+        _openai = OpenAI(api_key=key, timeout=300.0)
+    return _openai
+
+
+# ------------------------------------------------------
+# LIFESPAN
+# ------------------------------------------------------
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    from app.database import init_db
+    await init_db()
+    yield
+
 
 # ------------------------------------------------------
 # FASTAPI APP
 # ------------------------------------------------------
-app = FastAPI(title="DeLeA Backend")
+app = FastAPI(title="DeLeA Backend", lifespan=lifespan)
+
+# CORS: CORS_ALLOW_ORIGINS="https://app.example.com,http://localhost:5000" veya "*" (geliştirme)
+_cors = (os.getenv("CORS_ALLOW_ORIGINS") or "*").strip()
+if _cors == "*":
+    _cors_list = ["*"]
+else:
+    _cors_list = [o.strip() for o in _cors.split(",") if o.strip()]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+from app.routers import verify as verify_router
+app.include_router(verify_router.router)
 
 
 def is_too_short(text: str, min_words: int = 3) -> bool:
     if not text:
         return True
     return len(text.split()) < min_words
+
+
+@app.get("/health")
+async def health():
+    """Backend erişilebilirlik testi."""
+    return {"ok": True, "message": "Backend çalışıyor"}
 
 
 def _clamp_score(value, min_v=0, max_v=100):
@@ -50,6 +95,37 @@ def _clamp_score(value, min_v=0, max_v=100):
     return int(round(v))
 
 
+def transcribe_tmp_path(tmp_path: str) -> str:
+    """
+    Transkript: env OPENAI_TRANSCRIBE_MODEL (yoksa whisper-1, geniş uyumluluk).
+    Dil zorlama: OPENAI_TRANSCRIBE_LANG (ör. en, tr) sadece doluysa; aksi hâlde
+    API otomatik tespit — language='en' sabit bazı cihaz/lisan koşullarında boş dönebiliyordu.
+    """
+    model = (os.getenv("OPENAI_TRANSCRIBE_MODEL") or "whisper-1").strip() or "whisper-1"
+    lang = (os.getenv("OPENAI_TRANSCRIBE_LANG") or "").strip()
+    try:
+        fsize = os.path.getsize(tmp_path)
+    except OSError:
+        fsize = 0
+    with open(tmp_path, "rb") as audio_f:
+        kwargs: dict = {
+            "model": model,
+            "file": audio_f,
+            "response_format": "json",
+        }
+        if len(lang) >= 2:
+            kwargs["language"] = lang
+        t = get_openai_client().audio.transcriptions.create(**kwargs)
+    text = t.text.strip()
+    if not text and fsize > 0:
+        logger.warning(
+            "Transkript boş (model=%s, %d byte); OPENAI_TRANSCRIBE_LANG veya ses kalitesi kontrol edin.",
+            model,
+            fsize,
+        )
+    return text
+
+
 # ============================================================
 # 1) SINAV SİMÜLASYONU /evaluate  (GENEL ENDPOINT)
 # ============================================================
@@ -62,13 +138,19 @@ async def evaluate(
 ):
     """
     Sınav simülasyonu için ortak endpoint.
-    Flutter tarafı her soru için:
-      - file
-      - question_id
-      - question_type
-      - question_text
-    gönderiyor.
     """
+    try:
+        return await _do_evaluate(file, question_id, question_type, question_text)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("[/evaluate] Beklenmeyen hata: %s", e)
+        raise HTTPException(status_code=500, detail=f"Değerlendirme hatası: {str(e)}")
+
+
+async def _do_evaluate(file, question_id, question_type, question_text):
+    """Evaluate endpoint'in gerçek iş mantığı."""
+    logger.info("[/evaluate] İstek alındı, dosya: %s", file.filename)
 
     # 1) Dosyayı geçici klasöre kaydet
     suffix = os.path.splitext(file.filename)[1] or ".wav"
@@ -80,21 +162,18 @@ async def evaluate(
         raise HTTPException(status_code=500, detail=f"Temp file error: {e}")
 
     # 2) Transkripsiyon
+    logger.info("[/evaluate] OpenAI transcription başlatılıyor...")
     try:
-        with open(tmp_path, "rb") as audio_f:
-            transcription = client.audio.transcriptions.create(
-                model="gpt-4o-mini-transcribe",
-                file=audio_f,
-                response_format="json",
-                language="en",
-            )
+        transcript = transcribe_tmp_path(tmp_path)
     finally:
         try:
             os.remove(tmp_path)
         except OSError:
             pass
-
-    transcript: str = transcription.text.strip()
+    logger.info(
+        "[/evaluate] Transcription tamam: %s...",
+        (transcript[:50] + "..." if len(transcript) > 50 else transcript),
+    )
 
     # Çok kısa ise otomatik 0 ve basic feedback
     if is_too_short(transcript, min_words=3):
@@ -163,8 +242,9 @@ SADECE şu JSON formatında cevap ver:
 }}
 """
 
+    logger.info("[/evaluate] Relevance + scoring GPT çağrıları yapılıyor...")
     try:
-        rel_chat = client.chat.completions.create(
+        rel_chat = get_openai_client().chat.completions.create(
             model="gpt-4o-mini",
             response_format={"type": "json_object"},
             messages=[
@@ -313,7 +393,7 @@ SADECE şu JSON formatında cevap ver:
 """
 
     try:
-        chat = client.chat.completions.create(
+        chat = get_openai_client().chat.completions.create(
             model="gpt-4o-mini",
             response_format={"type": "json_object"},
             messages=[
@@ -357,6 +437,7 @@ SADECE şu JSON formatında cevap ver:
         "relevance_comment": relevance_comment,
     }
 
+    logger.info("[/evaluate] Değerlendirme tamamlandı.")
     return {
         "question_id": question_id,
         "question_type": question_type,
@@ -366,6 +447,56 @@ SADECE şu JSON formatında cevap ver:
         "feedback": feedback,
         "meta": meta,
     }
+
+
+# ============================================================
+# 1b) SINAV SİMÜLASYONU BATCH – Tüm cevaplar tek istekte, paralel OpenAI
+# ============================================================
+@app.post("/evaluate-batch")
+async def evaluate_batch(
+    files: List[UploadFile] = File(..., description="Ses dosyaları (sırayla)"),
+    metadata: str = Form(..., description="JSON dizi: [{\"question_id\", \"question_type\", \"question_text\"}, ...]"),
+):
+    """
+    Birden fazla cevabı tek istekte alır, sunucuda paralel OpenAI ile değerlendirir.
+    İstek OpenAI API'ye gider; her soru hızlıca değerlendirilir.
+    """
+    if not files:
+        raise HTTPException(status_code=400, detail="En az bir dosya gerekli.")
+    try:
+        meta_list = json.loads(metadata)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"metadata JSON hatası: {e}")
+    if not isinstance(meta_list, list) or len(meta_list) != len(files):
+        raise HTTPException(
+            status_code=400,
+            detail=f"metadata, dosya sayısıyla aynı uzunlukta bir dizi olmalı (dosya: {len(files)})."
+        )
+
+    async def one_eval(f: UploadFile, m: dict):
+        qid = m.get("question_id") or ""
+        qtype = m.get("question_type") or ""
+        qtext = m.get("question_text") or ""
+        try:
+            return await _do_evaluate(f, qid, qtype, qtext)
+        except Exception as e:
+            logger.exception("[/evaluate-batch] Tekil değerlendirme hatası: %s", e)
+            raise HTTPException(status_code=500, detail=f"Değerlendirme hatası: {str(e)}")
+
+    logger.info("[/evaluate-batch] %d cevap paralel değerlendiriliyor (OpenAI)...", len(files))
+    tasks = [one_eval(f, m) for f, m in zip(files, meta_list)]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    out = []
+    for i, r in enumerate(results):
+        if isinstance(r, Exception):
+            if isinstance(r, HTTPException):
+                raise r
+            logger.exception("[/evaluate-batch] Öğe %d hata: %s", i, r)
+            raise HTTPException(status_code=500, detail=f"Öğe {i}: {str(r)}")
+        out.append(r)
+    logger.info("[/evaluate-batch] Tüm değerlendirmeler tamamlandı.")
+    return {"results": out}
 
 
 # ============================================================
@@ -382,20 +513,13 @@ async def general_evaluate(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=f"Temp file error: {e}")
 
     try:
-        with open(tmp_path, "rb") as audio_f:
-            transcription = client.audio.transcriptions.create(
-                model="gpt-4o-mini-transcribe",
-                file=audio_f,
-                response_format="json",
-                language="en",
-            )
+        transcript = transcribe_tmp_path(tmp_path)
     finally:
         try:
             os.remove(tmp_path)
         except OSError:
             pass
 
-    transcript = transcription.text.strip()
     word_count = len(transcript.split())
 
     if word_count < 3:
@@ -466,7 +590,7 @@ Cevabı SADECE aşağıdaki JSON formatında ver, ek açıklama yazma:
 }}
 """
 
-    chat = client.chat.completions.create(
+    chat = get_openai_client().chat.completions.create(
         model="gpt-4o-mini",
         response_format={"type": "json_object"},
         messages=[
@@ -512,20 +636,12 @@ async def scenario_evaluate(
         raise HTTPException(status_code=500, detail=f"Temp file error: {e}")
 
     try:
-        with open(tmp_path, "rb") as audio_f:
-            transcription = client.audio.transcriptions.create(
-                model="gpt-4o-mini-transcribe",
-                file=audio_f,
-                response_format="json",
-                language="en",
-            )
+        transcript = transcribe_tmp_path(tmp_path)
     finally:
         try:
             os.remove(tmp_path)
         except OSError:
             pass
-
-    transcript = transcription.text.strip()
 
     if is_too_short(transcript, min_words=3):
         feedback = {
@@ -576,7 +692,7 @@ SADECE şu JSON formatını dön:
 }}
 """
 
-    chat = client.chat.completions.create(
+    chat = get_openai_client().chat.completions.create(
         model="gpt-4o-mini",
         response_format={"type": "json_object"},
         messages=[
@@ -617,20 +733,12 @@ async def image_evaluate(
         raise HTTPException(status_code=500, detail=f"Temp file error: {e}")
 
     try:
-        with open(tmp_path, "rb") as audio_f:
-            transcription = client.audio.transcriptions.create(
-                model="gpt-4o-mini-transcribe",
-                file=audio_f,
-                response_format="json",
-                language="en",
-            )
+        transcript = transcribe_tmp_path(tmp_path)
     finally:
         try:
             os.remove(tmp_path)
         except OSError:
             pass
-
-    transcript = transcription.text.strip()
 
     if is_too_short(transcript, min_words=3):
         feedback = {
@@ -684,7 +792,7 @@ SADECE şu JSON formatını dön:
 }}
 """
 
-    chat = client.chat.completions.create(
+    chat = get_openai_client().chat.completions.create(
         model="gpt-4o-mini",
         response_format={"type": "json_object"},
         messages=[
@@ -750,7 +858,7 @@ SADECE şu JSON formatında cevap ver:
 }}
 """
 
-    chat = client.chat.completions.create(
+    chat = get_openai_client().chat.completions.create(
         model="gpt-4o-mini",
         response_format={"type": "json_object"},
         messages=[
@@ -768,25 +876,37 @@ SADECE şu JSON formatında cevap ver:
 # ============================================================
 # 6) SORU GÖNDER /submit-question
 # ============================================================
-class UserQuestion(BaseModel):
+class UserQuestionPayload(BaseModel):
     category: str
     question: str
     email: Optional[str] = None
 
 
 @app.post("/submit-question")
-async def submit_question(payload: UserQuestion):
-    save_path = os.path.join(os.path.dirname(__file__), "user_questions.jsonl")
+async def submit_question(payload: UserQuestionPayload):
+    from app.database import async_session_maker
+    from app.models import UserQuestion as UserQuestionModel
 
-    record = {
-        "category": payload.category,
-        "question": payload.question,
-        "email": payload.email,
-        "source": "mobile-app",
-    }
-
-    with open(save_path, "a", encoding="utf-8") as f:
-        f.write(json.dumps(record, ensure_ascii=False) + "\n")
+    if async_session_maker:
+        async with async_session_maker() as session:
+            row = UserQuestionModel(
+                category=payload.category,
+                question=payload.question,
+                email=payload.email,
+                source="mobile-app",
+            )
+            session.add(row)
+            await session.commit()
+    else:
+        save_path = os.path.join(os.path.dirname(__file__), "user_questions.jsonl")
+        record = {
+            "category": payload.category,
+            "question": payload.question,
+            "email": payload.email,
+            "source": "mobile-app",
+        }
+        with open(save_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
     return {"ok": True}
 
@@ -816,7 +936,7 @@ async def translate(req: TranslateRequest):
     user_prompt = f"Target language: {target_lang}\n\nText:\n{text}"
 
     try:
-        chat = client.chat.completions.create(
+        chat = get_openai_client().chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": system_msg},

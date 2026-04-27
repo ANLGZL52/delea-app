@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 
+import 'api_service.dart';
 import 'plan_service.dart';
 
 class PurchaseService {
@@ -16,6 +17,7 @@ class PurchaseService {
   final InAppPurchase _iap = InAppPurchase.instance;
   StreamSubscription<List<PurchaseDetails>>? _subscription;
 
+  /// Google Play + App Store: aynı abonelik ürün kimliği (aylık plan).
   static const String premiumProductId = 'delea_premium_monthly';
 
   bool _isAvailable = false;
@@ -109,6 +111,7 @@ class PurchaseService {
     }
 
     final purchaseParam = PurchaseParam(productDetails: _premiumProduct!);
+    // Android / iOS: managed abonelikler bu API ile satın alınır (ürün mağazada "subscription" olmalı).
     await _iap.buyNonConsumable(purchaseParam: purchaseParam);
   }
 
@@ -119,8 +122,32 @@ class PurchaseService {
       } else {
         if (purchaseDetails.status == PurchaseStatus.purchased ||
             purchaseDetails.status == PurchaseStatus.restored) {
-          // MVP: Sunucu doğrulaması yok, direkt premium açıyoruz
-          await PlanService.setPremium();
+          final token = purchaseDetails.verificationData.serverVerificationData;
+          if (token.isNotEmpty) {
+            try {
+              final result = await ApiService.verifyPurchase(
+                purchaseToken: token,
+                productId: purchaseDetails.productID,
+                platform: Platform.isIOS ? 'ios' : 'android',
+              );
+              if (result['verified'] == true) {
+                int? expiresAtMs;
+                final raw = result['expires_at_ms'];
+                if (raw is int) {
+                  expiresAtMs = raw;
+                } else if (raw is num) {
+                  expiresAtMs = raw.toInt();
+                } else if (raw != null) {
+                  expiresAtMs = int.tryParse(raw.toString());
+                }
+                await PlanService.setPremium(expiresAtMs: expiresAtMs);
+              }
+            } catch (e) {
+              if (kDebugMode) {
+                print('Purchase verification error: $e');
+              }
+            }
+          }
         } else if (purchaseDetails.status == PurchaseStatus.error) {
           if (kDebugMode) {
             print('Purchase error: ${purchaseDetails.error}');

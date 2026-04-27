@@ -1,165 +1,370 @@
 // lib/screens/dla_info_screen.dart
 import 'package:flutter/material.dart';
 
+import '../theme/delea_tokens.dart';
+
+/// DLA hakkında yapılandırılmış, profesyonel içerik + bağımsızlık açıklaması.
 class DlaInfoScreen extends StatelessWidget {
   const DlaInfoScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final t = Theme.of(context).textTheme;
+
     return Scaffold(
-      backgroundColor: const Color(0xFF05060A),
-      appBar: AppBar(
-        title: const Text('DLA Hakkında'),
-        backgroundColor: Colors.black87,
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _sectionCard(
-              title: 'DLA Nedir?',
-              child: const Text(
-                'DLA (Digital Language Assessment), Türk Hava Yolları kabin memuru '
-                'adaylarının İngilizce konuşma becerisini ölçen dijital bir sınavdır. '
-                'Sınav; akıcılık, gramer, kelime bilgisi ve iletişim yeteneğinizi '
-                'değerlendirir. Amaç, uçuş sırasında yolcularla etkili ve profesyonel '
-                'şekilde iletişim kurup kuramayacağınızı ölçmektir.',
-                style: TextStyle(color: Colors.white),
-              ),
-            ),
-            const SizedBox(height: 14),
-
-            _sectionCard(
-              title: 'Sınavın Genel Yapısı',
-              child: const Text(
-                '• Genel Sorular: Kendinizi tanıtma, günlük hayat, iş/okul, hobiler gibi '
-                'konularda konuşma.\n'
-                '• Senaryolar: Kabin içinde yaşanabilecek problemli veya hassas durumlara '
-                'verdiğiniz tepkiler ve iletişim tarzınız.\n'
-                '• Resim Açıklama: Ekranda gördüğünüz bir fotoğrafı ayrıntılı şekilde '
-                'anlatmanız ve yorumlamanız beklenir.\n\n'
-                'Her bölümde net, anlaşılır ve profesyonel bir İngilizce kullanmanız '
-                'beklenir.',
-                style: TextStyle(color: Colors.white),
-              ),
-            ),
-            const SizedBox(height: 14),
-
-            _sectionCard(
-              title: 'Değerlendirilen Kriterler',
-              child: const Text(
-                '• Fluency (Akıcılık): Duraksamadan, çok takılmadan konuşabilme.\n'
-                '• Grammar (Dilbilgisi): Zamanları, cümle yapılarını ve temel dilbilgisi '
-                'kurallarını doğru kullanma.\n'
-                '• Vocabulary (Kelime Bilgisi): Uygun ve yeterli kelime kullanımı, '
-                'özellikle havacılık ve müşteri ilişkileriyle ilgili kelimeler.\n'
-                '• Coherence (Tutarlılık): Cevabınızın giriş–gelişme–sonuç açısından '
-                'mantıklı ve düzenli olması.\n'
-                '• Appropriateness (Uygunluk): Kabin görevlisine yakışır, nazik ve '
-                'profesyonel bir üslup kullanmanız.',
-                style: TextStyle(color: Colors.white),
-              ),
-            ),
-            const SizedBox(height: 14),
-
-            _sectionCard(
-              title: 'Hazırlık İpuçları',
-              child: const Text(
-                '• Mükemmel gramer peşinde koşmak yerine, anlaşılır ve akıcı olmaya odaklan.\n'
-                '• Cevaplarına kısa bir giriş yap, ardından detay ver ve küçük bir özetle bitir.\n'
-                '• “Customer, safety, delay, turbulence, emergency, crew, passenger” gibi '
-                'çekirdek kelimeleri sık kullanmaya çalış.\n'
-                '• Özellikle senaryolarda empati, sakinlik ve çözüm odaklı bir tavır göstermeye dikkat et.\n'
-                '• Evde pratik yaparken süre tut ve en az 45–60 saniye konuşmayı hedefle.',
-                style: TextStyle(color: Colors.white),
-              ),
-            ),
-            const SizedBox(height: 14),
-
-            _sectionCard(
-              title: 'Senaryolarda Nelere Dikkat Etmeliyim?',
-              child: const Text(
-                '• Önce yolcunun duygusunu anladığını göster: “I understand that you are upset…”\n'
-                '• Özür ve empati cümleleri kullan: “I\'m really sorry for the inconvenience.”\n'
-                '• Çözüm veya alternatif sun: “Let me check what I can do for you.”\n'
-                '• Sakin, nazik ve profesyonel bir ton kullan; tartışmaya girme.\n'
-                '• Güvenlik içeren durumlarda, prosedürlere bağlı kalmayı mutlaka vurgula.',
-                style: TextStyle(color: Colors.white),
-              ),
-            ),
-            const SizedBox(height: 14),
-
-            _sectionCard(
-              title: 'Sık Yapılan Hatalar',
-              child: const Text(
-                '• Çok kısa cevaplar vermek (1–2 cümle ile yetinmek).\n'
-                '• Sadece “yes/no” tarzı cevaplar vermek, örnek ve detay eklememek.\n'
-                '• Anlamadığında hiç soru sormamak; oysa “Could you please repeat the question?” demek doğal.\n'
-                '• Çok uzun duraklamalar ve “ee, ıı” gibi sesleri aşırı kullanmak.\n'
-                '• Senaryolarda savunmacı veya kaba bir üslup kullanmak.',
-                style: TextStyle(color: Colors.white),
-              ),
-            ),
-            const SizedBox(height: 14),
-
-            _sectionCard(
-              title: 'Bu Uygulama Bana Nasıl Yardımcı Olur?',
-              child: const Text(
-                '• Sınav Simülasyonu: Gerçeğe yakın bir DLA deneyimi yaşayıp, her sorudan sonra skorlarını görebilirsin.\n'
-                '• Genel Sorular: Kendini ifade etme ve akıcılık konusunda pratik yaparsın.\n'
-                '• Senaryolar: Kabin içi problem çözme ve iletişim becerilerini geliştirirsin.\n'
-                '• Resim Açıklama: Detaylı anlatım ve yorumlama becerini güçlendirirsin.\n'
-                '• Sözlük: DLA’da işine yarayacak kelimeleri hedefli şekilde öğrenebilirsin.',
-                style: TextStyle(color: Colors.white),
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            Center(
-              child: Text(
-                'Unutma: Amaç, mükemmel olmak değil; \n'
-                'yolcuya güven veren, net ve profesyonel bir iletişim kurabilmek.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.85),
-                  fontSize: 13,
-                  fontStyle: FontStyle.italic,
+      body: CustomScrollView(
+        slivers: [
+          SliverAppBar.large(
+            backgroundColor: DeleaColors.background,
+            surfaceTintColor: Colors.transparent,
+            expandedHeight: 200,
+            pinned: true,
+            title: const Text('DLA rehberi'),
+            flexibleSpace: FlexibleSpaceBar(
+              background: Container(
+                padding: const EdgeInsets.fromLTRB(20, 52, 20, 0),
+                alignment: Alignment.bottomLeft,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Container(
+                      width: 52,
+                      height: 52,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16),
+                        gradient: const LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [DeleaColors.brand, Color(0xFF1E3A8A)],
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: DeleaColors.brand.withValues(alpha: 0.35),
+                            blurRadius: 20,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.flight_takeoff_rounded,
+                        color: Colors.white,
+                        size: 28,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          Text(
+                            'Dijital dil değerlendirmesi',
+                            style: t.titleLarge?.copyWith(
+                              color: DeleaColors.textPrimary,
+                            ),
+                            maxLines: 2,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Kabin mülakatı İngilizce akışı—özet rehber',
+                            style: t.bodySmall,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
-            const SizedBox(height: 16),
-          ],
-        ),
+          ),
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
+            sliver: SliverList(
+              delegate: SliverChildListDelegate(
+                [
+                  const _Callout(
+                    child: _Paragraph(
+                      text:
+                          'Türk Hava Yolları, DLA adı, sınav hükümleri ve puanlama ağırlıkları '
+                          'için yalnızca resmî kaynaklara ve bilgilendirmenize dayanın. DLA +, bu '
+                          'kaynakların yerine geçen bir sınava veya sertifika vermez: '
+                          'bireysel, yapay zekâ destekli pratik uygulamasıdır.',
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  _InfoSection(
+                    icon: Icons.school_outlined,
+                    color: const Color(0xFF0EA5E9),
+                    title: 'DLA neden var?',
+                    body: const _Paragraph(
+                      text:
+                          'THY ve birçok havayolu, kabin ekibinin otorite dilinde, net ve yolcuya '
+                          'güven veren konuşma beklentisi koyar. DLA, bu beklentiyi tespit amaçlı, '
+                          'dijital ortamda, akıcılık, dil bilgisi, kapsam (kelime) ve sözlü anlatıma '
+                          'bakan bölümlerle ilerletilebilen bir tür konuşma incelemesidir. '
+                          'Amaç: sakin, çözüme açık ve kurala uyumlu duruşu gözlemek.',
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  _InfoSection(
+                    icon: Icons.view_timeline_outlined,
+                    color: const Color(0xFF7C3AED),
+                    title: 'Bölümler genelde neleri ölçer?',
+                    body: const Column(
+                      children: [
+                        _NumberLine(
+                          n: '1',
+                          text:
+                              'Kendini, deneyimini, motivasyonunu ve günlük iletişimini açıkça ifade edebilme; '
+                              'aşırı jargonsuz, oturaklı cümleler.',
+                        ),
+                        _NumberLine(
+                          n: '2',
+                          text:
+                              'Sınırlı sürede senaryo: yolcunun duygu ve talebine sabır, empati, '
+                              'güvenlik/ prosedüre dönük, çözümcü yanıt.',
+                        ),
+                        _NumberLine(
+                          n: '3',
+                          text:
+                              'Görsele dönük anlatı: tespit edilen detay, sıra, hafif yorum, '
+                              'düz bir İngilizce tümleme.',
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  _InfoSection(
+                    icon: Icons.grade_outlined,
+                    color: const Color(0xFF22C55E),
+                    title: 'Dilsel kriterlere dair yorum',
+                    body: const _Paragraph(
+                      text: 'Aşağıdakiler, mülakat dilinde en sık işaret edilen alanlardır:\n\n'
+                          'Fluency — anlam akışı; aşırı tekrar ve anlık tıkanma denetimi.\n\n'
+                          'Accuracy / Grammar — büyük hataların, zamansal tutarlılığın etkisi.\n\n'
+                          'Range — havacılık, yolcu ve operasyon söylemine uygun sözcük sınırı.\n\n'
+                          'Discourse — giriş, açılım, kısa yönlendirme ve noktalama: tutarlılık.\n\n'
+                          'Approach — kabin gölgesi: sakin, tartışmaya girmeyen, çözüme açık üslup.',
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  _InfoSection(
+                    icon: Icons.tips_and_updates_outlined,
+                    color: const Color(0xFFF59E0B),
+                    title: 'Pratikte fark yaratacak 6 adım',
+                    body: const Column(
+                      children: [
+                        _Bullet("Süre tut; hedef 50–60 sn üstü tutarlı konuşma, acele etmeyip susmayı sınırla."),
+                        _Bullet("Aç → geliştir → mini kapanış: 3 parçalı mini makro (tek paragrafta) düşün."),
+                        _Bullet("Belli çekirdek sözlük: safety, security, compliance, concern, option, I’ll check, let me..."),
+                        _Bullet("Duygusal senaryolarda: önce tanı, sonra sınırla, sonra hareket planı; savunmaya dönme."),
+                        _Bullet("Bir kez açıkça “Could you repeat, please?” demekten kaçınma: mesaj netliğidir."),
+                        _Bullet("Aşırı ezberi ezber cümle bırak: doğal, az ama güvenli varyasyon ekle."),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  _InfoSection(
+                    icon: Icons.science_outlined,
+                    color: const Color(0xFF38BDF8),
+                    title: 'DLA + bu rehberi nerede hayata geçirir?',
+                    body: const _Paragraph(
+                      text: 'Sınav simülasyonu tüm tipleri (ısınma, genel, resim, senaryo) tek akışa bağlar. '
+                          'Ayrı modüllerle parça parça çalışıp sözlükle sözlük tazeler, geri bildirim '
+                          "metninde Türkçe açıklama ve örnek yanıt gösterilir. Skor, OpenAI altyapısına dayanır; "
+                          'aynı cevabın farklı oturumda birkaç puan sapması olağandır.',
+                    ),
+                  ),
+                  const SizedBox(height: 28),
+                  const Divider(color: DeleaColors.border),
+                  const SizedBox(height: 16),
+                  Center(
+                    child: Text(
+                      'DLA + ile yol, bilinçli, tekrar eden, ölçülebilen pratiktir.\n'
+                      'Resmî sınav sonucu sadece ilgili kurum tarafından verilebilir.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: DeleaColors.textMuted,
+                        fontSize: 12,
+                        height: 1.5,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
+}
 
-  Widget _sectionCard({required String title, required Widget child}) {
+class _InfoSection extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String title;
+  final Widget body;
+
+  const _InfoSection({
+    required this.icon,
+    required this.color,
+    required this.title,
+    required this.body,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF111827),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: Colors.white24,
-          width: 0.8,
-        ),
+        color: DeleaColors.backgroundCard,
+        borderRadius: BorderRadius.circular(DeleaRadii.lg),
+        border: Border.all(color: DeleaColors.border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.25),
+            offset: const Offset(0, 4),
+            blurRadius: 12,
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: const TextStyle(
-              color: Colors.white70,
-              fontWeight: FontWeight.w700,
-              fontSize: 15,
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, size: 22, color: color),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          body,
+        ],
+      ),
+    );
+  }
+}
+
+class _Callout extends StatelessWidget {
+  final Widget child;
+  const _Callout({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E1B2E),
+        borderRadius: BorderRadius.circular(DeleaRadii.lg),
+        border: Border.all(
+          color: DeleaColors.brandLight.withValues(alpha: 0.4),
+        ),
+      ),
+      child: child,
+    );
+  }
+}
+
+class _Paragraph extends StatelessWidget {
+  final String text;
+  const _Paragraph({required this.text});
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+            color: DeleaColors.textSecondary,
+            height: 1.55,
+          ),
+    );
+  }
+}
+
+class _NumberLine extends StatelessWidget {
+  final String n;
+  final String text;
+  const _NumberLine({required this.n, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 24,
+            height: 24,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: DeleaColors.brand.withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              n,
+              style: const TextStyle(
+                fontWeight: FontWeight.w800,
+                fontSize: 12,
+                color: DeleaColors.brandLight,
+              ),
             ),
           ),
-          const SizedBox(height: 8),
-          child,
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              text,
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    color: DeleaColors.textSecondary,
+                    height: 1.5,
+                    fontSize: 14.5,
+                  ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Bullet extends StatelessWidget {
+  final String text;
+  const _Bullet(this.text);
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('· ', style: TextStyle(color: DeleaColors.textMuted, fontSize: 18, height: 1.2)),
+          Expanded(
+            child: Text(
+              text,
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    color: DeleaColors.textSecondary,
+                    height: 1.45,
+                    fontSize: 14.5,
+                  ),
+            ),
+          ),
         ],
       ),
     );

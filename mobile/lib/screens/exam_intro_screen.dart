@@ -2,137 +2,193 @@
 import 'package:flutter/material.dart';
 import 'question_screen.dart';
 
-// DEMO/PREMIUM için eklenen importlar
+import '../constants/exam_config.dart';
 import '../services/plan_service.dart';
-import '../widgets/demo_limit_dialog.dart';
+import '../theme/delea_tokens.dart';
+import 'premium_screen.dart';
 
 class ExamIntroScreen extends StatelessWidget {
   const ExamIntroScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final t = Theme.of(context).textTheme;
     return Scaffold(
-      backgroundColor: const Color(0xFF05060A),
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        title: const Text('Sınav Talimatları'),
-        centerTitle: true,
+        title: const Text('Sınav talimatı'),
+        leading: IconButton(
+          icon: const Icon(Icons.close_rounded),
+          onPressed: () => Navigator.maybePop(context),
+        ),
       ),
       body: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                color: const Color(0xFF111827),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: const Color(0xFF3B82F6)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
-                  Text(
-                    'Sınav Hakkında',
-                    style: TextStyle(
-                      color: Color(0xFF60A5FA),
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  SizedBox(height: 12),
-                  _BulletRow(
-                    emoji: '🕒',
-                    text: 'Toplam 10 soru (yaklaşık 15 dakika)',
-                  ),
-                  _BulletRow(
-                    emoji: '🎯',
-                    text: '6 Genel + 2 Resim + 2 Senaryo',
-                  ),
-                  _BulletRow(
-                    emoji: '🎙️',
-                    text: 'Her soru için 45–75 saniye konuşma',
-                  ),
-                  _BulletRow(
-                    emoji: '⚡',
-                    text: 'İlk 3 soru ısınma sorusu (daha kısa)',
-                  ),
-                  _BulletRow(
-                    emoji: '⚠️',
-                    text: 'Sınav sırasında uygulamadan çıkmayın',
-                  ),
-                ],
+            Text(
+              'Hazırlık simülasyonu',
+              textAlign: TextAlign.center,
+              style: t.bodySmall?.copyWith(
+                color: DeleaColors.brandLight,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.3,
               ),
             ),
-            const SizedBox(height: 20),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: const Color(0xFF0F172A),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: const Text(
-                '💡 İpucu: Soru okunduktan sonra konuşmaya başlayın. '
-                'Cevap verirken doğal olun, günlük konuşma tonunda konuşmaya çalışın.',
-                style: TextStyle(color: Colors.white70),
-              ),
-            ),
-            const Spacer(),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () async {
-                  // 🔐 DEMO/PREMIUM KONTROLÜ
-                  final canUse = await PlanService.canUseFeature("exam");
-
-                  if (!canUse) {
-                    // Demo hakkı dolmuş kullanıcı
-                    // Kullanıcıya uyarı dialogu göster
-                    // (Bu widget'ı lib/widgets/demo_limit_dialog.dart içinde tanımladık)
-                    // featureName, dialogdaki açıklama metninde kullanılacak
-                    // (Örn: Exam Simulation)
-                    // ignore: use_build_context_synchronously
-                    showDialog(
-                      context: context,
-                      builder: (_) => const DemoLimitDialog(
-                        featureName: "Exam Simulation",
+            const SizedBox(height: 12),
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: DeleaColors.backgroundCard,
+                        borderRadius: BorderRadius.circular(DeleaRadii.xl),
+                        border: Border.all(
+                          color: DeleaColors.brandLight.withValues(alpha: 0.4),
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: DeleaColors.brand.withValues(alpha: 0.15),
+                            offset: const Offset(0, 6),
+                            blurRadius: 18,
+                          ),
+                        ],
                       ),
-                    );
-                    return;
-                  }
-
-                  // Kullanabiliyorsa: önce kullanımını kaydet
-                  await PlanService.registerUsage("exam");
-
-                  // Sonra eski davranış: sınav ekranına geç
-                  // ignore: use_build_context_synchronously
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const QuestionScreen(),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Nasıl ilerler?',
+                            style: t.titleLarge,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Sorular yüksek sesle okunur. Kaydı başlatıp, düşünmek için kısa bir an '
+                            'bırakabilir; cevabınızı cümlelere böl.',
+                            style: t.bodySmall,
+                          ),
+                          const SizedBox(height: 14),
+                          _BulletRow(
+                            icon: Icons.schedule,
+                            text:
+                                'Yaklaşık ${ExamConfig.totalCount} soru · 18–24 dakika; konuşma bölümlerinde 45–75 sn hedef.',
+                          ),
+                          _BulletRow(
+                            icon: Icons.shuffle,
+                            text:
+                                'İçerik dağılımı: ${ExamConfig.introCount} ısınma, ${ExamConfig.generalCount} genel, ${ExamConfig.imageCount} resim, ${ExamConfig.scenarioCount} senaryo — rastgele sırada.',
+                          ),
+                          const _BulletRow(
+                            icon: Icons.mic,
+                            text:
+                                'Her soru için ayrı kayıt. Bitince cevaplar toplu değerlendirilir; internet kesintisinde bölüme yeniden dönmeden hata alabilirsiniz.',
+                          ),
+                          const _BulletRow(
+                            icon: Icons.warning_amber_rounded,
+                            text:
+                                'Arayı çok uzatırsanız cevabınız nitelik açısından sınıflanabilir. Simülasyonu tek oturumda bitirmeniz iyi pratiktir.',
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: DeleaColors.surfaceRaised,
+                        borderRadius: BorderRadius.circular(DeleaRadii.lg),
+                        border: Border.all(
+                          color: DeleaColors.border,
+                        ),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            Icons.tips_and_updates,
+                            size: 22,
+                            color: DeleaColors.brandLight.withValues(alpha: 0.95),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Aşırı “kusursuz aksan”dan çok, anlaşılır ve tutarlı bir tını hedefleyin. '
+                              'Soruyu dinleyip nefes alın; cevabınızı iki–üç cümlelik net bloklara bölün.',
+                              style: t.bodyMedium?.copyWith(
+                                color: DeleaColors.textSecondary,
+                                height: 1.5,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            FilledButton(
+              onPressed: () async {
+                if (!await PlanService.isPremium()) {
+                  if (!context.mounted) return;
+                  await showDialog<void>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      backgroundColor: DeleaColors.backgroundCard,
+                      title: const Text('Premium gerekli'),
+                      content: const Text(
+                        'Sınav simülasyonu yalnızca Premium abonelikle açılır. '
+                        'Ana ekrandaki sınava, Premium olduktan sonra ulaşırsın.',
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          child: const Text('Kapat'),
+                        ),
+                        FilledButton.tonal(
+                          onPressed: () {
+                            Navigator.pop(ctx);
+                            Navigator.push<void>(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const PremiumScreen(),
+                              ),
+                            );
+                          },
+                          child: const Text('Premium’u aç'),
+                        ),
+                      ],
                     ),
                   );
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2563EB),
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(24),
+                  return;
+                }
+                if (!context.mounted) return;
+                await Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const QuestionScreen(),
                   ),
-                ),
-                child: const Text(
-                  'Sınava Başla ➜',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+                );
+              },
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                backgroundColor: DeleaColors.brand,
               ),
-            )
+              child: const Text('Simülasyona devam et'),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Simülasyon çok aşamalıdır; sınava yalnızca Premium aboneleri başlayabilir.',
+              textAlign: TextAlign.center,
+              style: t.bodySmall?.copyWith(
+                color: DeleaColors.textMuted,
+                fontSize: 11,
+              ),
+            ),
           ],
         ),
       ),
@@ -141,26 +197,31 @@ class ExamIntroScreen extends StatelessWidget {
 }
 
 class _BulletRow extends StatelessWidget {
-  final String emoji;
+  final IconData icon;
   final String text;
-
-  const _BulletRow({required this.emoji, required this.text});
+  const _BulletRow({required this.icon, required this.text});
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.only(bottom: 10),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(emoji, style: const TextStyle(fontSize: 18)),
-          const SizedBox(width: 8),
+          Icon(
+            icon,
+            size: 20,
+            color: DeleaColors.brandLight.withValues(alpha: 0.9),
+          ),
+          const SizedBox(width: 10),
           Expanded(
             child: Text(
               text,
-              style: const TextStyle(
-                color: Colors.white70,
-                fontSize: 14,
-              ),
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    color: DeleaColors.textSecondary,
+                    fontSize: 14,
+                    height: 1.45,
+                  ),
             ),
           ),
         ],

@@ -1,0 +1,4 @@
+# Firebase local cache
+.firebase/
+*-debug.log
+hosting-privacy/

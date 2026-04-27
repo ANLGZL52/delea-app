@@ -91,7 +91,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     if (_loadingPlan) {
       return const Scaffold(
-        backgroundColor: Color(0xFF020617),
         body: Center(
           child: CircularProgressIndicator(color: Colors.blueAccent),
         ),
@@ -99,7 +98,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFF020617),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -562,7 +560,6 @@ class _ExamHistoryScreenState extends State<_ExamHistoryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF020617),
       appBar: AppBar(
         title: const Text("Sınav Geçmişi"),
         backgroundColor: Colors.transparent,

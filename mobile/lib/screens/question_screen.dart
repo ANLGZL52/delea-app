@@ -1,15 +1,17 @@
 // lib/screens/question_screen.dart
 
-import 'dart:io';
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:record/record.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 
+import '../constants/exam_config.dart';
 import '../models/exam_question.dart';
 import '../data/exam_question_bank.dart';
 import '../services/api_service.dart';
+import '../audio_helper.dart';
 import 'exam_result_screen.dart';
 
 class QuestionScreen extends StatefulWidget {
@@ -22,15 +24,24 @@ class QuestionScreen extends StatefulWidget {
 class _QuestionScreenState extends State<QuestionScreen> {
   late final List<ExamQuestion> _questions;
 
-  /// Her soru için backend sonucu; bazı sorular henüz
-  /// değerlendirilmemiş olabileceği için nullable tuttuk.
+  /// Her soru için kaydedilen ses dosyası yolu (sınav sonunda değerlendirilecek)
+  late final List<String?> _recordedPaths;
+
+  /// Sınav sonunda OpenAI ile değerlendirme sonuçları
   late final List<Map<String, dynamic>?> _results;
 
   int _currentIndex = 0;
 
   final AudioRecorder _recorder = AudioRecorder();
   bool _isRecording = false;
-  bool _isSending = false;
+  /// Web: kayıt başlama (çok kısa dokunuşlarda anlamsız / boş webm hatası önlenir)
+  DateTime? _webRecordingStart;
+  bool _isEvaluating = false;
+
+  /// Aynı eşik: mikr. durdur, Sonraki ve toplu API; sessiz/çok kısa dosya giderilmesin
+  int get _minValidRecordingBytes => kIsWeb ? 1200 : 3000;
+  int _evaluatingIndex = 0;
+  int _evaluatingTotal = 0;
 
   // 🔊 Text-to-Speech
   late final FlutterTts _tts;
@@ -47,19 +58,15 @@ class _QuestionScreenState extends State<QuestionScreen> {
     _tts = FlutterTts();
     _configureTts();
 
-    // 13 soruluk sınav seti
     _questions = ExamQuestionBank.generateExam(
-      introCount: 2,
-      generalCount: 6,
-      imageCount: 3,
-      scenarioCount: 2,
+      introCount: ExamConfig.introCount,
+      generalCount: ExamConfig.generalCount,
+      imageCount: ExamConfig.imageCount,
+      scenarioCount: ExamConfig.scenarioCount,
     );
 
-    // Başta tüm sonuçlar null
-    _results = List<Map<String, dynamic>?>.filled(
-      _questions.length,
-      null,
-    );
+    _recordedPaths = List<String?>.filled(_questions.length, null);
+    _results = List<Map<String, dynamic>?>.filled(_questions.length, null);
 
     // İlk soruyu otomatik sesli oku
     _speakCurrentQuestion();
@@ -70,6 +77,7 @@ class _QuestionScreenState extends State<QuestionScreen> {
     _tts.setSpeechRate(0.45);
     _tts.setPitch(1.0);
     _tts.setVolume(1.0);
+    // Tarayıcı ile emülatör/cihaz farklı TTS motoru kullandığı için ses farklı olabilir
   }
 
   @override
@@ -150,103 +158,263 @@ class _QuestionScreenState extends State<QuestionScreen> {
 
   Future<void> _toggleRecording() async {
     if (_isRecording) {
-      // Kaydı durdur
       final path = await _recorder.stop();
       setState(() => _isRecording = false);
 
-      if (path != null) {
-        await _sendAudioToBackend(File(path));
+      if (path != null && path.isNotEmpty) {
+        try {
+          final recStart = _webRecordingStart;
+          _webRecordingStart = null;
+          final bytes = await getAudioBytesFromPath(path);
+          final minDuration = recStart == null
+              ? Duration.zero
+              : DateTime.now().difference(recStart);
+          // Web: önce opus+MediaRecorder (çok kısa/boş webm) sorunluydu; artık WAV. Yine de kısa tık engeli.
+          final tooShort = kIsWeb && minDuration < const Duration(milliseconds: 450);
+          if (tooShort) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                    'Kayıt çok kısa. Mikrofona basılı tutun, 1 sn konuşup bırakın.',
+                  ),
+                  duration: Duration(seconds: 3),
+                ),
+              );
+            }
+            return;
+          }
+          if (bytes.length < _minValidRecordingBytes) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    kIsWeb
+                        ? 'Ses yeterince kaydedilmedi. Mikrofon iznini, Chrome’da şifresiz (localhost) veya HTTPS sayfa olduğunuzu ve doğru girdi (mik) seçimini kontrol edin; bir kez daha deneyin.'
+                        : 'Ses kaydı algılanamadı. Emülatörde mikrofon sorunlu olabilir. '
+                            'Sesli cevap için gerçek cihazda deneyin.',
+                  ),
+                  duration: const Duration(seconds: 4),
+                ),
+              );
+            }
+          } else {
+            _recordedPaths[_currentIndex] = path;
+            setState(() {});
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Cevap kaydedildi. Sonraki soruya geçebilirsin.')),
+              );
+            }
+          }
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Kayıt işlenemedi: $e')),
+            );
+          }
+        }
       }
       return;
     }
 
-    // Yeni kayıt
-    if (!await _recorder.hasPermission()) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Mikrofon izni gerekli.')),
-        );
+    if (kIsWeb) {
+      if (!await _recorder.hasPermission()) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Mikrofon izni gerekli. Adres çubuğundaki kilit veya izin simgesinden mikrofona izin verin; sayfa http ise yalnızca localhost güvenlidir (HTTPS tercih edin).',
+              ),
+              duration: Duration(seconds: 5),
+            ),
+          );
+        }
+        return;
       }
-      return;
+    } else {
+      var status = await Permission.microphone.status;
+      if (!status.isGranted) {
+        status = await Permission.microphone.request();
+      }
+      if (!status.isGranted) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Mikrofon izni gerekli. Ayarlardan izin verin.'),
+            ),
+          );
+        }
+        return;
+      }
     }
 
-    final dir = await getTemporaryDirectory();
-    final filePath = '${dir.path}/answer_${_currentIndex + 1}.m4a';
-
-    await _recorder.start(
-      const RecordConfig(
+    String filePath;
+    RecordConfig config;
+    if (kIsWeb) {
+      // WebM+Opus (MediaRecorder) kısa/kırılgan; WAV AudioWorklet ile stabil (OpenAI tüm türü kabul eder).
+      filePath = 'recording_${_currentIndex + 1}.wav';
+      config = const RecordConfig(
+        encoder: AudioEncoder.wav,
+        sampleRate: 44100,
+        numChannels: 1,
+      );
+    } else {
+      final dir = await getTemporaryDirectory();
+      filePath = '${dir.path}/answer_${_currentIndex + 1}.m4a';
+      config = const RecordConfig(
         encoder: AudioEncoder.aacLc,
         sampleRate: 44100,
         bitRate: 128000,
-      ),
-      path: filePath,
-    );
+      );
+    }
 
+    await _recorder.start(config, path: filePath);
+
+    if (kIsWeb) {
+      _webRecordingStart = DateTime.now();
+    }
     setState(() => _isRecording = true);
   }
 
-  Future<void> _sendAudioToBackend(File file) async {
-    setState(() => _isSending = true);
+  /// Sınav sonunda tüm kayıtları tek istekte backend'e gönderir (batch); backend OpenAI ile paralel değerlendirir.
+  Future<void> _evaluateAllAtEnd() async {
+    final toEvaluate = <int>[];
+    for (int i = 0; i < _questions.length; i++) {
+      final path = _recordedPaths[i];
+      if (path != null && path.isNotEmpty) toEvaluate.add(i);
+    }
+    if (toEvaluate.isEmpty) return;
+
+    setState(() {
+      _isEvaluating = true;
+      _evaluatingTotal = toEvaluate.length;
+      _evaluatingIndex = 0;
+    });
 
     try {
-      final q = _currentQuestion;
-
-      final result = await ApiService.sendAudio(
-        file,
-        questionId: q.id,
-        questionType: q.type,
-        questionText: q.text,
-      );
-
-      // Bu sorunun sonucunu sakla
-      _results[_currentIndex] = result;
-
-      setState(() => _isSending = false);
-    } catch (e) {
-      setState(() => _isSending = false);
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Değerlendirme hatası: $e')),
-      );
-    }
-  }
-
-  Future<void> _goNext() async {
-    // Hâlâ kayıt varsa durdurup gönder
-    if (_isRecording) {
-      final path = await _recorder.stop();
-      setState(() => _isRecording = false);
-      if (path != null) {
-        await _sendAudioToBackend(File(path));
+      // Batch: tek istekte gönder – backend OpenAI ile paralel değerlendirir
+      final batchItems = <Map<String, dynamic>>[];
+      final batchIndices = <int>[]; // batchItems[k] hangi soru indeksi
+      for (final i in toEvaluate) {
+        final path = _recordedPaths[i]!;
+        final bytes = await getAudioBytesFromPath(path);
+        if (bytes.length < _minValidRecordingBytes) continue;
+        final q = _questions[i];
+        final ext = kIsWeb ? 'wav' : 'm4a';
+        batchItems.add({
+          'bytes': bytes,
+          'filename': 'answer_${i + 1}.$ext',
+          'questionId': q.id,
+          'questionType': q.type,
+          'questionText': q.text,
+        });
+        batchIndices.add(i);
       }
-    }
 
-    // Değerlendirme devam ederken geçme
-    if (_isSending) return;
+      if (batchItems.isEmpty) {
+        if (mounted) {
+          setState(() => _isEvaluating = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Gönderilecek geçerli ses kaydı yok.')),
+          );
+        }
+        return;
+      }
 
-    // Son soru değilsek sonraki soruya geç
-    if (_currentIndex < _questions.length - 1) {
-      setState(() {
-        _currentIndex++;
-        _currentTranslation = null; // yeni soruda çeviri sıfırlansın
-      });
+      setState(() => _evaluatingIndex = batchItems.length);
+      final resultsList = await ApiService.sendAudioBatch(batchItems);
 
-      await _speakCurrentQuestion();
+      if (!mounted) return;
+      for (var k = 0; k < resultsList.length && k < batchIndices.length; k++) {
+        _results[batchIndices[k]] = resultsList[k];
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isEvaluating = false);
+      final msg = e.toString().split('\n').first;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Değerlendirme yapılamadı: $msg. Backend çalışıyor ve OPENAI_API_KEY ayarlı mı?',
+          ),
+          duration: const Duration(seconds: 5),
+        ),
+      );
       return;
     }
 
-    // Son soruydu → sonuç ekranına git
     if (!mounted) return;
+    setState(() => _isEvaluating = false);
+
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
         builder: (_) => ExamResultScreen(
           questions: _questions,
-          results: _results, // List<Map<String, dynamic>?>
+          results: _results,
         ),
       ),
     );
+  }
+
+  Future<void> _goNext() async {
+    if (_isRecording) {
+      final path = await _recorder.stop();
+      setState(() => _isRecording = false);
+      _webRecordingStart = null;
+      if (path != null) {
+        try {
+          final bytes = await getAudioBytesFromPath(path);
+          if (bytes.length < _minValidRecordingBytes) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                    'Bu soru için yeterli ses yok. Mikrofona basılı tutup 1 sn konuşup, '
+                    "önce mavi düğmeye tekrar deyip 'Cevap kaydedildi' mesajını bekle, sonra ileri.",
+                  ),
+                  duration: Duration(seconds: 5),
+                ),
+              );
+            }
+            return;
+          }
+          _recordedPaths[_currentIndex] = path;
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Kayıt okunamadı: $e')),
+            );
+          }
+          return;
+        }
+      }
+    }
+
+    if (_isEvaluating) return;
+
+    if (_currentIndex < _questions.length - 1) {
+      setState(() {
+        _currentIndex++;
+        _currentTranslation = null;
+      });
+      await _speakCurrentQuestion();
+      return;
+    }
+
+    // Son soru – değerlendirme aşamasına geç
+    final recordedCount = _recordedPaths.where((p) => p != null).length;
+    if (recordedCount == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('En az bir soruya cevap kaydetmelisin.'),
+        ),
+      );
+      return;
+    }
+
+    await _evaluateAllAtEnd();
   }
 
   @override
@@ -258,6 +426,56 @@ class _QuestionScreenState extends State<QuestionScreen> {
     final isImageQuestion = q.type == 'image';
     final hasImage =
         isImageQuestion && q.imageUrl != null && q.imageUrl!.isNotEmpty;
+
+    if (_isEvaluating) {
+      return Scaffold(
+        backgroundColor: const Color(0xFF050509),
+        body: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const CircularProgressIndicator(
+                    color: Color(0xFF3B82F6),
+                    strokeWidth: 3,
+                  ),
+                  const SizedBox(height: 32),
+                  Text(
+                    '$_evaluatingIndex / $_evaluatingTotal cevap değerlendirildi',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Cevaplarınız detaylı şekilde analiz ediliyor.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: 15,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Cevaplar paralel analiz ediliyor.\n'
+                    'Her soru için konuşma, gramer ve kelime inceleniyor.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.5),
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -295,7 +513,10 @@ class _QuestionScreenState extends State<QuestionScreen> {
 
                     if (hasImage) ...[
                       ConstrainedBox(
-                        constraints: const BoxConstraints(maxHeight: 260),
+                        constraints: BoxConstraints(
+                          maxHeight: (MediaQuery.of(context).size.height * 0.32)
+                              .clamp(160.0, 280.0),
+                        ),
                         child: ClipRrectImage(url: q.imageUrl!),
                       ),
                       const SizedBox(height: 16),
@@ -314,7 +535,9 @@ class _QuestionScreenState extends State<QuestionScreen> {
                         IconButton(
                           icon: const Icon(Icons.volume_up, size: 30),
                           onPressed: _speakCurrentQuestion,
-                          tooltip: 'Soruyu sesli dinle',
+                          tooltip: kIsWeb
+                              ? 'Soruyu sesli dinle (tarayıcı sesi)'
+                              : 'Soruyu sesli dinle',
                         ),
                         const SizedBox(width: 16),
                         _isTranslating
@@ -345,7 +568,7 @@ class _QuestionScreenState extends State<QuestionScreen> {
                 children: [
                   Center(
                     child: GestureDetector(
-                      onTap: _isSending ? null : _toggleRecording,
+                      onTap: (_isEvaluating ? null : _toggleRecording),
                       child: Container(
                         width: 90,
                         height: 90,
@@ -372,10 +595,10 @@ class _QuestionScreenState extends State<QuestionScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    _isSending
-                        ? 'Cevabın değerlendiriliyor...'
-                        : _isRecording
-                            ? 'Kayıt alınıyor, bitirmek için tekrar dokun.'
+                    _isRecording
+                        ? 'Kayıt alınıyor, bitirmek için tekrar dokun.'
+                        : _recordedPaths[_currentIndex] != null
+                            ? 'Cevap kaydedildi. Sonraki soruya geçebilirsin.'
                             : 'Mikrofona dokunarak cevabını kaydet.',
                     textAlign: TextAlign.center,
                     style: const TextStyle(color: Colors.grey, fontSize: 13),
@@ -385,7 +608,7 @@ class _QuestionScreenState extends State<QuestionScreen> {
                     height: 48,
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: (_isRecording || _isSending) ? null : _goNext,
+                      onPressed: (_isRecording || _isEvaluating) ? null : _goNext,
                       child: Text(
                         current < total ? 'Next Question' : 'Finish Exam',
                       ),
