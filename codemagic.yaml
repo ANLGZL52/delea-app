@@ -9,9 +9,14 @@ workflows:
     environment:
       flutter: stable
       xcode: latest
-      # ios_signing: App bölümünde "iOS code signing" ile Otomatik veya
-      # App Store Connect API + bundle com.delea.app
+      # Codemagic must fetch App Store distribution cert + provisioning profile.
+      # Repository → Integrations: App Store Connect (API key). Same Apple Team as the App ID.
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.delea.app
     scripts:
+      - name: Initialize keychain for code signing
+        script: keychain initialize
       - name: Get packages & CocoaPods
         script: |
           set -e
@@ -19,6 +24,12 @@ workflows:
           flutter pub get
           cd ios
           pod install
+      - name: Apply provisioning profiles to Xcode project
+        script: |
+          set -e
+          xcode-project use-profiles \
+            --project "$CM_BUILD_DIR/mobile/ios/Runner.xcodeproj" \
+            --archive-method app-store
       - name: Flutter build IPA
         script: |
           set -e
