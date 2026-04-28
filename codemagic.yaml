@@ -41,8 +41,17 @@ workflows:
     artifacts:
       - mobile/build/ios/ipa/*.ipa
     publishing:
-      app_store_connect:
-        auth: integration
-        # Upload IPA to App Store Connect. TestFlight/App Review actions are optional (post-processing).
-        # submit_to_testflight: true
-        # beta_groups: [ internal testers group name ]
+      # Uses Team integration JWT (integrations.app_store_connect). Explicit path for mobile/ monorepo IPA.
+      scripts:
+        - name: Publish IPA to App Store Connect
+          script: |
+            set -e
+            set -x
+            IPA_DIR="$CM_BUILD_DIR/mobile/build/ios/ipa"
+            ls -la "$IPA_DIR"
+            IPA_FILE="$(find "$IPA_DIR" -maxdepth 1 -name '*.ipa' | head -1)"
+            if [ -z "$IPA_FILE" ] || [ ! -f "$IPA_FILE" ]; then
+              echo "ERROR: No .ipa under $IPA_DIR"
+              exit 1
+            fi
+            app-store-connect publish --path "$IPA_FILE" --verbose
