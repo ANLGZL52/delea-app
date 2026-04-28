@@ -38,6 +38,13 @@ workflows:
           set -e
           cd "$CM_BUILD_DIR/mobile"
           flutter build ipa --release
+          ls -la build/ios/ipa/
+          # Publishing phase may resolve artifacts from CM_BUILD_OUTPUT_DIR; copy IPA there when set.
+          if [ -n "${CM_BUILD_OUTPUT_DIR:-}" ]; then
+            mkdir -p "$CM_BUILD_OUTPUT_DIR"
+            cp -v build/ios/ipa/*.ipa "$CM_BUILD_OUTPUT_DIR/" || true
+            ls -la "$CM_BUILD_OUTPUT_DIR"
+          fi
     artifacts:
       - mobile/build/ios/ipa/*.ipa
     publishing:
@@ -47,11 +54,25 @@ workflows:
           script: |
             set -e
             set -x
-            IPA_DIR="$CM_BUILD_DIR/mobile/build/ios/ipa"
-            ls -la "$IPA_DIR"
-            IPA_FILE="$(find "$IPA_DIR" -maxdepth 1 -name '*.ipa' | head -1)"
+            ROOT="${CM_BUILD_DIR:?}"
+            IPA_FILE=""
+            # Prefer Codemagic staging dir when present (clone tree may differ in publishing).
+            if [ -n "${CM_BUILD_OUTPUT_DIR:-}" ] && [ -d "$CM_BUILD_OUTPUT_DIR" ]; then
+              IPA_FILE="$(find "$CM_BUILD_OUTPUT_DIR" -maxdepth 3 -type f -name '*.ipa' 2>/dev/null | head -1)"
+            fi
+            if [ -z "$IPA_FILE" ]; then
+              IPA_FILE="$(find "$ROOT/mobile/build/ios/ipa" -maxdepth 1 -type f -name '*.ipa' 2>/dev/null | head -1)"
+            fi
+            if [ -z "$IPA_FILE" ]; then
+              IPA_FILE="$(find "$ROOT" -type f -path '*/build/ios/ipa/*.ipa' 2>/dev/null | head -1)"
+            fi
             if [ -z "$IPA_FILE" ] || [ ! -f "$IPA_FILE" ]; then
-              echo "ERROR: No .ipa under $IPA_DIR"
+              echo "ERROR: No .ipa found. Debug:"
+              ls -la "$ROOT" || true
+              ls -la "$ROOT/mobile" || true
+              ls -la "${CM_BUILD_OUTPUT_DIR:-}" || true
+              find "$ROOT" -name '*.ipa' -type f 2>/dev/null || true
               exit 1
             fi
+            echo "Publishing $IPA_FILE"
             app-store-connect publish --path "$IPA_FILE" --verbose
