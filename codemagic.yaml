@@ -27,12 +27,10 @@ workflows:
           flutter pub get
           cd ios
           pod install
-      - name: Apply provisioning profiles to Xcode project
-        script: |
-          set -e
-          xcode-project use-profiles \
-            --project "$CM_BUILD_DIR/mobile/ios/Runner.xcodeproj" \
-            --archive-method app-store
+      # Do NOT run xcode-project use-profiles here: it forces manual signing tied to
+      # provisioning profile metadata that still resolves to legacy "iOS Distribution",
+      # while modern certs in keychain are "Apple Distribution" — exportArchive then fails.
+      # ios_signing + automatic ExportOptions lets Xcode match certificates from keychain.
       - name: Flutter build IPA
         script: |
           set -e

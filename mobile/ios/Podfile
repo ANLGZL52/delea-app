@@ -38,9 +38,10 @@ post_install do |installer|
     flutter_additional_ios_build_settings(target)
     target.build_configurations.each do |config|
       next if config.name == 'Debug'
-      # Match modern Apple Distribution certs; avoids legacy "iOS Distribution" lookup during export.
-      config.build_settings['CODE_SIGN_IDENTITY'] = 'Apple Distribution'
+      # Automatic signing + team; avoids hard-coded "iOS Distribution" / "Apple Distribution" mismatch at export.
+      config.build_settings['CODE_SIGN_STYLE'] = 'Automatic'
       config.build_settings['DEVELOPMENT_TEAM'] = '25YU5R23MS'
+      config.build_settings.delete('CODE_SIGN_IDENTITY')
     end
   end
 end
