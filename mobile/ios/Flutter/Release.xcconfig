@@ -1,1 +1,3 @@
 #include "Generated.xcconfig"
+// CI / Xcode export: survives Flutter iOS migrations better than pbxproj-only settings.
+DEVELOPMENT_TEAM=25YU5R23MS
