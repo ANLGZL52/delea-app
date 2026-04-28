@@ -6,6 +6,9 @@ workflows:
     name: DLA+ iOS
     max_build_duration: 120
     instance_type: mac_mini_m1
+    # Must match Team integrations → Apple Developer Portal → App Store Connect API key *name*.
+    integrations:
+      app_store_connect: "Codemagic delea"
     environment:
       flutter: stable
       xcode: latest
@@ -37,5 +40,9 @@ workflows:
           flutter build ipa --release
     artifacts:
       - mobile/build/ios/ipa/*.ipa
-    # publishing: UI → App settings → iOS code signing + Distribution: App Store
-    # → App Store Connect (TestFlight) integration
+    publishing:
+      app_store_connect:
+        auth: integration
+        # Upload IPA to App Store Connect. TestFlight/App Review actions are optional (post-processing).
+        # submit_to_testflight: true
+        # beta_groups: [ internal testers group name ]
