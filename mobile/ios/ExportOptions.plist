@@ -8,8 +8,6 @@
 	<string>25YU5R23MS</string>
 	<key>signingStyle</key>
 	<string>manual</string>
-	<key>signingCertificate</key>
-	<string>Apple Distribution</string>
 	<key>provisioningProfiles</key>
 	<dict>
 		<key>com.delea.app</key>
