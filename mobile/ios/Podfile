@@ -41,7 +41,8 @@ post_install do |installer|
       # Align with Codemagic manual profiles (use-profiles); avoids CI "No Accounts" on Pods.
       config.build_settings['CODE_SIGN_STYLE'] = 'Manual'
       config.build_settings['DEVELOPMENT_TEAM'] = '25YU5R23MS'
-      config.build_settings.delete('CODE_SIGN_IDENTITY')
+      # Match Apple Distribution cert (not legacy "iOS Distribution") for exportArchive.
+      config.build_settings['CODE_SIGN_IDENTITY'] = 'Apple Distribution'
     end
   end
 end
