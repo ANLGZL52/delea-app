@@ -8,6 +8,8 @@ workflows:
     integrations:
       app_store_connect: "Codemagic delea"
     environment:
+      groups:
+        - delea_ios   # App env: DELEA_P12_PASSWORD (Secret) bu grupta
       flutter: stable
       xcode: latest
       ios_signing:
