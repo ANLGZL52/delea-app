@@ -1,5 +1,5 @@
-# DLA+ iOS — manual code signing: UI reference names must match exactly.
-# Certificates: delea_dist_cert | Profile: delea_app_store
+# DLA+ iOS — manual signing: delea_dist_cert + delea_app_store (Codemagic UI).
+# Optional app env (Secret): DELEA_P12_PASSWORD = .p12 export password
 workflows:
   ios-workflow:
     name: DLA+ iOS
@@ -10,22 +10,49 @@ workflows:
     environment:
       flutter: stable
       xcode: latest
-      # Use uploaded .p12 + profile (NOT distribution_type fetch — that skips UI uploads).
       ios_signing:
         provisioning_profiles:
-          - delea_app_store
+          - profile: delea_app_store
+            environment_variable: DELEA_PROFILE_PATH
         certificates:
-          - delea_dist_cert
+          - certificate: delea_dist_cert
+            environment_variable: DELEA_CERT_PATH
     scripts:
-      - name: Set up keychain for code signing
+      - name: Set up keychain
         script: keychain initialize
-      - name: Verify signing identities in keychain
+      - name: Install certificate and provisioning profile
         script: |
           set -e
-          echo "--- Code signing identities (expect Apple Distribution) ---"
+          set -x
+          CERT_PATH="${DELEA_CERT_PATH:-}"
+          PROFILE_PATH="${DELEA_PROFILE_PATH:-}"
+          CERT_PASSWORD="${DELEA_P12_PASSWORD:-${CM_CERTIFICATE_PASSWORD:-}}"
+          # Fallback: Codemagic MobileDevice dirs
+          if [ -z "$CERT_PATH" ] && [ -d "$HOME/Library/MobileDevice/Certificates" ]; then
+            CERT_PATH="$(find "$HOME/Library/MobileDevice/Certificates" -maxdepth 1 -type f \( -name '*.p12' -o -name '*.P12' \) 2>/dev/null | head -1)"
+          fi
+          if [ -z "$PROFILE_PATH" ] && [ -d "$HOME/Library/MobileDevice/Provisioning Profiles" ]; then
+            PROFILE_PATH="$(find "$HOME/Library/MobileDevice/Provisioning Profiles" -maxdepth 1 -name '*.mobileprovision' 2>/dev/null | head -1)"
+          fi
+          if [ -z "$CERT_PATH" ] || [ ! -f "$CERT_PATH" ]; then
+            echo "ERROR: No certificate file. DELEA_CERT_PATH=$DELEA_CERT_PATH"
+            ls -la "$HOME/Library/MobileDevice/Certificates" 2>/dev/null || true
+            exit 1
+          fi
+          echo "Using certificate: $CERT_PATH"
+          if [ -n "$CERT_PASSWORD" ]; then
+            keychain add-certificates --certificate "$CERT_PATH" --certificate-password "$CERT_PASSWORD"
+          else
+            keychain add-certificates --certificate "$CERT_PATH"
+          fi
+          if [ -n "$PROFILE_PATH" ] && [ -f "$PROFILE_PATH" ]; then
+            PROFILES_HOME="$HOME/Library/MobileDevice/Provisioning Profiles"
+            mkdir -p "$PROFILES_HOME"
+            cp "$PROFILE_PATH" "$PROFILES_HOME/$(uuidgen).mobileprovision"
+            echo "Installed profile from $PROFILE_PATH"
+          fi
+          echo "--- Keychain identities ---"
           security find-identity -v -p codesigning
-          echo "--- Provisioning profiles ---"
-          ls -la "$HOME/Library/MobileDevice/Provisioning Profiles/" 2>/dev/null || true
       - name: Get packages and CocoaPods
         script: |
           set -e
