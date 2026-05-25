@@ -1,34 +1,37 @@
-# DLA+ iOS build — Klon kökü = repo kökü; Flutter: mobile/
-# Codemagic UI: "Repository" altında EK working directory KULLANMA (veya sadece ./).
-# İmzalama + TestFlight: https://docs.codemagic.io/flutter-publishing/publishing-to-app-store/
+# DLA+ iOS — manual code signing: UI reference names must match exactly.
+# Certificates: delea_dist_cert | Profile: delea_app_store
 workflows:
   ios-workflow:
     name: DLA+ iOS
     max_build_duration: 120
     instance_type: mac_mini_m1
-    # Must match Team integrations → Apple Developer Portal → App Store Connect API key *name*.
     integrations:
       app_store_connect: "Codemagic delea"
     environment:
       flutter: stable
       xcode: latest
-      # Codemagic must fetch App Store distribution cert + provisioning profile.
-      # Repository → Integrations: App Store Connect (API key). Same Apple Team as the App ID.
+      # Use uploaded .p12 + profile (NOT distribution_type fetch — that skips UI uploads).
       ios_signing:
-        distribution_type: app_store
-        bundle_identifier: com.delea.app
+        provisioning_profiles:
+          - delea_app_store
+        certificates:
+          - delea_dist_cert
     scripts:
-      - name: Initialize keychain for code signing
+      - name: Set up keychain for code signing
         script: keychain initialize
-      - name: Get packages & CocoaPods
+      - name: Verify signing identities in keychain
+        script: |
+          set -e
+          echo "--- Code signing identities (expect Apple Distribution) ---"
+          security find-identity -v -p codesigning
+          echo "--- Provisioning profiles ---"
+          ls -la "$HOME/Library/MobileDevice/Provisioning Profiles/" 2>/dev/null || true
+      - name: Get packages and CocoaPods
         script: |
           set -e
           cd "$CM_BUILD_DIR/mobile"
           flutter pub get
-          cd ios
-          pod install
-      # Required on CI: Xcode has no logged-in Apple ID. use-profiles applies Codemagic-fetched
-      # App Store provisioning + certs so archive does not ask for "Accounts" / Development profiles.
+          cd ios && pod install
       - name: Apply provisioning profiles to Xcode project
         script: |
           set -e
@@ -41,40 +44,28 @@ workflows:
           cd "$CM_BUILD_DIR/mobile"
           flutter build ipa --release --export-options-plist=ios/ExportOptions.plist
           ls -la build/ios/ipa/
-          # Publishing phase may resolve artifacts from CM_BUILD_OUTPUT_DIR; copy IPA there when set.
           if [ -n "${CM_BUILD_OUTPUT_DIR:-}" ]; then
             mkdir -p "$CM_BUILD_OUTPUT_DIR"
             cp -v build/ios/ipa/*.ipa "$CM_BUILD_OUTPUT_DIR/" || true
-            ls -la "$CM_BUILD_OUTPUT_DIR"
           fi
     artifacts:
       - mobile/build/ios/ipa/*.ipa
     publishing:
-      # Uses Team integration JWT (integrations.app_store_connect). Explicit path for mobile/ monorepo IPA.
       scripts:
-        - name: Publish IPA to App Store Connect
+        - name: Publish to App Store Connect
           script: |
             set -e
-            set -x
             ROOT="${CM_BUILD_DIR:?}"
             IPA_FILE=""
-            # Prefer Codemagic staging dir when present (clone tree may differ in publishing).
             if [ -n "${CM_BUILD_OUTPUT_DIR:-}" ] && [ -d "$CM_BUILD_OUTPUT_DIR" ]; then
               IPA_FILE="$(find "$CM_BUILD_OUTPUT_DIR" -maxdepth 3 -type f -name '*.ipa' 2>/dev/null | head -1)"
             fi
             if [ -z "$IPA_FILE" ]; then
               IPA_FILE="$(find "$ROOT/mobile/build/ios/ipa" -maxdepth 1 -type f -name '*.ipa' 2>/dev/null | head -1)"
             fi
-            if [ -z "$IPA_FILE" ]; then
-              IPA_FILE="$(find "$ROOT" -type f -path '*/build/ios/ipa/*.ipa' 2>/dev/null | head -1)"
-            fi
             if [ -z "$IPA_FILE" ] || [ ! -f "$IPA_FILE" ]; then
-              echo "ERROR: No .ipa found. Debug:"
-              ls -la "$ROOT" || true
-              ls -la "$ROOT/mobile" || true
-              ls -la "${CM_BUILD_OUTPUT_DIR:-}" || true
+              echo "ERROR: No .ipa found"
               find "$ROOT" -name '*.ipa' -type f 2>/dev/null || true
               exit 1
             fi
-            echo "Publishing $IPA_FILE"
             app-store-connect publish --path "$IPA_FILE" --verbose
