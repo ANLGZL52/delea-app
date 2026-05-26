@@ -71,7 +71,9 @@ workflows:
         script: |
           set -e
           cd "$CM_BUILD_DIR/mobile"
-          flutter build ipa --release --export-options-plist=ios/ExportOptions.plist
+          flutter build ipa --release \
+            --export-options-plist=ios/ExportOptions.plist \
+            --dart-define=API_BASE_URL=https://delea-app-production.up.railway.app
           ls -la build/ios/ipa/
           if [ -n "${CM_BUILD_OUTPUT_DIR:-}" ]; then
             mkdir -p "$CM_BUILD_OUTPUT_DIR"
