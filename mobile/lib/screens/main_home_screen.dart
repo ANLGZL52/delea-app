@@ -674,20 +674,21 @@ class _PrimaryExamCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
+                      Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 8,
+                        runSpacing: 6,
                         children: [
-                          Flexible(
-                            child: Text(
-                              'Sınav simülasyonu',
-                              style: t.titleLarge?.copyWith(
-                                color: Colors.white,
-                                fontSize: 21,
-                                fontWeight: FontWeight.w800,
-                              ),
+                          Text(
+                            'Sınav simülasyonu',
+                            style: t.titleLarge?.copyWith(
+                              color: Colors.white,
+                              fontSize: 21,
+                              fontWeight: FontWeight.w800,
+                              height: 1.15,
                             ),
                           ),
-                          if (locked) ...[
-                            const SizedBox(width: 8),
+                          if (locked)
                             Container(
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 8,
@@ -715,7 +716,6 @@ class _PrimaryExamCard extends StatelessWidget {
                                 ),
                               ),
                             ),
-                          ],
                         ],
                       ),
                       const SizedBox(height: 5),
