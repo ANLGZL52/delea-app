@@ -189,7 +189,7 @@ async def verify_purchase(req: VerifyPurchaseRequest):
     if expiry_ms and expiry_ms >= now_ms:
         # Ödeme alındı döneminde: süre ileri — paymentState boş/uyumsuz olsa bile kabul
         pass
-    elif purchase_state in (1, 2, 3):
+    elif payment_state in (1, 2, 3):
         pass
     else:
         return {

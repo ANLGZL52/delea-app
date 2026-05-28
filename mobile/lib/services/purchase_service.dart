@@ -17,6 +17,12 @@ class PurchaseService {
   final InAppPurchase _iap = InAppPurchase.instance;
   StreamSubscription<List<PurchaseDetails>>? _subscription;
 
+  /// Premium yerelde aktif edildiğinde (sunucu doğrulaması sonrası veya mağaza onayı yedek yolu).
+  final StreamController<void> _premiumActivatedController =
+      StreamController<void>.broadcast();
+
+  Stream<void> get onPremiumActivated => _premiumActivatedController.stream;
+
   /// Google Play + App Store: aynı abonelik ürün kimliği (aylık plan).
   static const String premiumProductId = 'delea_premium_monthly';
 
@@ -111,53 +117,90 @@ class PurchaseService {
     }
 
     final purchaseParam = PurchaseParam(productDetails: _premiumProduct!);
-    // Android / iOS: managed abonelikler bu API ile satın alınır (ürün mağazada "subscription" olmalı).
     await _iap.buyNonConsumable(purchaseParam: purchaseParam);
   }
 
   void _onPurchaseUpdated(List<PurchaseDetails> purchaseDetailsList) async {
     for (final purchaseDetails in purchaseDetailsList) {
       if (purchaseDetails.status == PurchaseStatus.pending) {
-        // İstersen pending için UI gösterebilirsin
-      } else {
-        if (purchaseDetails.status == PurchaseStatus.purchased ||
-            purchaseDetails.status == PurchaseStatus.restored) {
-          final token = purchaseDetails.verificationData.serverVerificationData;
-          if (token.isNotEmpty) {
-            try {
-              final result = await ApiService.verifyPurchase(
-                purchaseToken: token,
-                productId: purchaseDetails.productID,
-                platform: Platform.isIOS ? 'ios' : 'android',
-              );
-              if (result['verified'] == true) {
-                int? expiresAtMs;
-                final raw = result['expires_at_ms'];
-                if (raw is int) {
-                  expiresAtMs = raw;
-                } else if (raw is num) {
-                  expiresAtMs = raw.toInt();
-                } else if (raw != null) {
-                  expiresAtMs = int.tryParse(raw.toString());
-                }
-                await PlanService.setPremium(expiresAtMs: expiresAtMs);
-              }
-            } catch (e) {
-              if (kDebugMode) {
-                print('Purchase verification error: $e');
-              }
-            }
-          }
-        } else if (purchaseDetails.status == PurchaseStatus.error) {
-          if (kDebugMode) {
-            print('Purchase error: ${purchaseDetails.error}');
-          }
-        }
+        continue;
+      }
 
-        if (purchaseDetails.pendingCompletePurchase) {
-          await _iap.completePurchase(purchaseDetails);
+      if (purchaseDetails.status == PurchaseStatus.purchased ||
+          purchaseDetails.status == PurchaseStatus.restored) {
+        await _activatePremiumFromPurchase(purchaseDetails);
+      } else if (purchaseDetails.status == PurchaseStatus.error) {
+        if (kDebugMode) {
+          print('Purchase error: ${purchaseDetails.error}');
         }
       }
+
+      if (purchaseDetails.pendingCompletePurchase) {
+        await _iap.completePurchase(purchaseDetails);
+      }
+    }
+  }
+
+  String _purchaseVerificationPayload(PurchaseDetails purchaseDetails) {
+    final server = purchaseDetails.verificationData.serverVerificationData;
+    if (server.isNotEmpty) return server;
+    return purchaseDetails.verificationData.localVerificationData;
+  }
+
+  int? _parseExpiresAtMs(dynamic raw) {
+    if (raw is int) return raw;
+    if (raw is num) return raw.toInt();
+    if (raw != null) return int.tryParse(raw.toString());
+    return null;
+  }
+
+  /// Mağaza satın alımı onaylandıysa premium aç; sunucu yanıt vermezse yerel yedek.
+  Future<void> _activatePremiumFromPurchase(
+    PurchaseDetails purchaseDetails,
+  ) async {
+    if (purchaseDetails.productID != premiumProductId) return;
+
+    final token = _purchaseVerificationPayload(purchaseDetails);
+    var serverVerified = false;
+    int? expiresAtMs;
+
+    if (token.isNotEmpty) {
+      try {
+        final result = await ApiService.verifyPurchase(
+          purchaseToken: token,
+          productId: purchaseDetails.productID,
+          platform: Platform.isIOS ? 'ios' : 'android',
+        );
+        if (result['verified'] == true) {
+          serverVerified = true;
+          expiresAtMs = _parseExpiresAtMs(result['expires_at_ms']);
+        } else if (kDebugMode) {
+          print('Purchase server verify failed: ${result['reason']}');
+        }
+      } catch (e) {
+        if (kDebugMode) {
+          print('Purchase verification error: $e');
+        }
+      }
+    }
+
+    if (serverVerified) {
+      await PlanService.setPremium(expiresAtMs: expiresAtMs);
+    } else {
+      // Mağaza satın alımı tamamlandı; backend yapılandırılmamış veya geçici hata.
+      final fallbackExpiry = DateTime.now()
+          .add(const Duration(days: 32))
+          .millisecondsSinceEpoch;
+      await PlanService.setPremium(expiresAtMs: fallbackExpiry);
+      if (kDebugMode) {
+        print(
+          'Premium activated locally after store purchase (serverVerified=false).',
+        );
+      }
+    }
+
+    if (!_premiumActivatedController.isClosed) {
+      _premiumActivatedController.add(null);
     }
   }
 
@@ -173,5 +216,6 @@ class PurchaseService {
 
   void dispose() {
     _subscription?.cancel();
+    _premiumActivatedController.close();
   }
 }

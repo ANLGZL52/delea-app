@@ -3,8 +3,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:record/record.dart';
+
+import '../services/microphone_permission_service.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 
 import '../constants/exam_config.dart';
@@ -233,18 +234,7 @@ class _QuestionScreenState extends State<QuestionScreen> {
         return;
       }
     } else {
-      var status = await Permission.microphone.status;
-      if (!status.isGranted) {
-        status = await Permission.microphone.request();
-      }
-      if (!status.isGranted) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Mikrofon izni gerekli. Ayarlardan izin verin.'),
-            ),
-          );
-        }
+      if (!await MicrophonePermissionService.ensureGranted(context)) {
         return;
       }
     }

@@ -1,9 +1,13 @@
 // lib/screens/profile_screen.dart
 
 import 'package:flutter/material.dart';
-import '../services/plan_service.dart';
-import '../services/history_service.dart';
+
+import '../core/app_legal.dart';
 import '../models/exam_attempt.dart';
+import '../services/history_service.dart';
+import '../services/plan_service.dart';
+import '../services/session_service.dart';
+import '../widgets/legal_link.dart';
 import 'exam_history_detail_screen.dart';
 import 'performance_screen.dart';
 
@@ -17,23 +21,32 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   bool _isPremium = false;
   bool _loadingPlan = true;
-
-  // Şimdilik sabit kullanıcı bilgileri (ileride backend ile doldurulur)
-  final String _userName = "Anıl Guzel";
-  final String _userEmail = "anlgzl52@gmail.com";
-  final String _memberSince = "2025-11-16";
+  bool _signedIn = true;
+  String _userName = SessionService.guestDisplayName;
+  String _userEmail = SessionService.guestEmail;
+  final String _memberSince = '2025-11-16';
 
   @override
   void initState() {
     super.initState();
-    _loadPlan();
+    _loadAll();
   }
 
-  Future<void> _loadPlan() async {
+  Future<void> _loadAll() async {
+    await SessionService.ensureDefaultProfile(
+      defaultName: 'Kullanıcı',
+      defaultEmail: AppLegal.supportEmail,
+    );
     final isPrem = await PlanService.isPremium();
+    final signedIn = await SessionService.isSignedIn();
+    final name = await SessionService.displayName();
+    final email = await SessionService.email();
     if (!mounted) return;
     setState(() {
       _isPremium = isPrem;
+      _signedIn = signedIn;
+      _userName = name;
+      _userEmail = email;
       _loadingPlan = false;
     });
   }
@@ -53,27 +66,38 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _onTapSubscription() {
-    // Premium ekranına gider (main.dart içinde '/premium' route'u tanımlı)
-    Navigator.pushNamed(context, '/premium').then((_) => _loadPlan());
+    Navigator.pushNamed(context, '/premium').then((_) => _loadAll());
+  }
+
+  Future<void> _onTapSignIn() async {
+    await SessionService.signIn(
+      displayName: 'Kullanıcı',
+      email: AppLegal.supportEmail,
+    );
+    await _loadAll();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Oturum açıldı.')),
+    );
   }
 
   Future<void> _onTapLogout() async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text("Çıkış Yap"),
+        title: const Text('Çıkış Yap'),
         content: const Text(
-          "Hesaptan çıkmak istediğinden emin misin?\n"
-          "Şimdilik bu sadece demo bir işlemdir.",
+          'Oturumun kapatılacak. Premium aboneliğin Apple hesabında kalır; '
+          'uygulamada yalnızca yerel oturum bilgileri sıfırlanır.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text("Vazgeç"),
+            child: const Text('Vazgeç'),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text("Çıkış Yap"),
+            child: const Text('Çıkış Yap'),
           ),
         ],
       ),
@@ -81,9 +105,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     if (confirm != true) return;
 
+    await SessionService.signOut();
     if (!mounted) return;
+
+    Navigator.of(context).popUntil((route) => route.isFirst);
+
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Çıkış işlemi (demo).")),
+      const SnackBar(
+        content: Text(
+          'Çıkış yapıldı. Profilden tekrar oturum açabilirsiniz.',
+        ),
+        duration: Duration(seconds: 4),
+      ),
     );
   }
 
@@ -231,10 +264,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: _ProfileBigButton(
-                    icon: Icons.logout,
-                    label: "Çıkış Yap",
-                    color: const Color(0xFF450A0A),
-                    onTap: _onTapLogout,
+                    icon: _signedIn ? Icons.logout : Icons.login,
+                    label: _signedIn ? 'Çıkış Yap' : 'Oturum Aç',
+                    color: _signedIn
+                        ? const Color(0xFF450A0A)
+                        : const Color(0xFF1E3A8A),
+                    onTap: _signedIn ? _onTapLogout : _onTapSignIn,
                   ),
                 ),
               ],
@@ -302,27 +337,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const SizedBox(height: 16),
 
             // İLETİŞİM
-            const _SectionCard(
-              title: "İletişim",
+            _SectionCard(
+              title: 'İletişim ve yasal',
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    "Her türlü soru ve geri bildirimin için:",
+                  const Text(
+                    'Her türlü soru ve geri bildirimin için:',
                     style: TextStyle(
                       color: Colors.white70,
                       fontSize: 13,
                     ),
                   ),
-                  SizedBox(height: 8),
+                  const SizedBox(height: 8),
                   Text(
-                    "delea.support@example.com",
-                    style: TextStyle(
+                    AppLegal.supportEmail,
+                    style: const TextStyle(
                       color: Colors.blueAccent,
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
+                  const SizedBox(height: 12),
+                  LegalLink(
+                    label: 'Destek sayfası',
+                    url: AppLegal.supportUrl,
+                  ),
+                  const SizedBox(height: 8),
+                  const LegalLinkRow(),
                 ],
               ),
             ),

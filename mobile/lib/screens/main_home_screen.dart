@@ -40,13 +40,16 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
     if (mounted) setState(() => _isPremium = p);
   }
 
-  Future<void> _openPremium() async {
-    if (!mounted) return;
-    await Navigator.push<void>(
+  /// Premium ekranından `true` dönerse abonelik aktif edilmiştir.
+  Future<bool> _openPremium() async {
+    if (!mounted) return false;
+    final unlocked = await Navigator.push<bool>(
       context,
       MaterialPageRoute(builder: (_) => const PremiumScreen()),
     );
     await _refreshPremium();
+    if (unlocked == true) return true;
+    return await PlanService.isPremium();
   }
 
   Future<void> _onExamCardTap() async {
@@ -80,9 +83,17 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
             child: const Text('Kapat'),
           ),
           FilledButton.tonal(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(ctx);
-              _openPremium();
+              final ok = await _openPremium();
+              if (!mounted) return;
+              if (ok) {
+                await Navigator.push<void>(
+                  context,
+                  MaterialPageRoute(builder: (_) => const ExamIntroScreen()),
+                );
+                if (mounted) await _refreshPremium();
+              }
             },
             child: const Text('Premium’a geç'),
           ),

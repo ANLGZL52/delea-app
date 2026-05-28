@@ -7,6 +7,7 @@ import 'screens/main_home_screen.dart';
 import 'screens/premium_screen.dart';
 import 'services/plan_service.dart';
 import 'services/purchase_service.dart';
+import 'services/session_service.dart';
 import 'theme/app_theme.dart';
 
 Future<void> main() async {
@@ -14,6 +15,7 @@ Future<void> main() async {
   await configureFirebase();
   await PurchaseService.instance.init();
   await PlanService.isPremium();
+  await SessionService.ensureDefaultProfile();
 
   // Masaüstü / web geliştirmede telefon çerçevesi ve cihaz seçici (sürüm dışı).
   runApp(

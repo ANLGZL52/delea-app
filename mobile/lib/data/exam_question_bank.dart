@@ -2333,6 +2333,13 @@ static List<ExamQuestion> _pickUniqueImageQuestions(int count, Random rnd) {
 
     return [...intro, ...rest];
   }
+
+  /// Pratik ekranlarında her açılışta farklı ilk soru için karışık kopya.
+  static List<ExamQuestion> shuffledCopy(List<ExamQuestion> source) {
+    final copy = List<ExamQuestion>.from(source);
+    copy.shuffle(Random());
+    return copy;
+  }
 }
 
 

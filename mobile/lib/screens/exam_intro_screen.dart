@@ -150,12 +150,22 @@ class ExamIntroScreen extends StatelessWidget {
                           child: const Text('Kapat'),
                         ),
                         FilledButton.tonal(
-                          onPressed: () {
+                          onPressed: () async {
                             Navigator.pop(ctx);
-                            Navigator.push<void>(
+                            final unlocked = await Navigator.push<bool>(
                               context,
                               MaterialPageRoute(
                                 builder: (_) => const PremiumScreen(),
+                              ),
+                            );
+                            if (!context.mounted) return;
+                            final isPrem = unlocked == true ||
+                                await PlanService.isPremium();
+                            if (!isPrem) return;
+                            await Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const QuestionScreen(),
                               ),
                             );
                           },
