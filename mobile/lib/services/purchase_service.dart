@@ -24,7 +24,7 @@ class PurchaseService {
   Stream<void> get onPremiumActivated => _premiumActivatedController.stream;
 
   /// Google Play + App Store: aynı abonelik ürün kimliği (aylık plan).
-  static const String premiumProductId = 'delea_premium_monthly';
+  static const String premiumProductId = 'dla_aylik';
 
   bool _isAvailable = false;
   bool get isAvailable => _isAvailable;

@@ -96,7 +96,7 @@ class SubscriptionLegalDisclosure extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          _line('Ürün', 'DLA+ Premium Aylık (delea_premium_monthly)'),
+          _line('Ürün', 'DLA+ Aylık (dla_aylik)'),
           _line('Süre', '1 ay, otomatik yenilenir'),
           _line('Fiyat', price),
           const SizedBox(height: 6),

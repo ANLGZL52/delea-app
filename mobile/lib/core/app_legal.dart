@@ -10,6 +10,6 @@ class AppLegal {
 
   static const String supportEmail = 'anlgzl52@gmail.com';
 
-  static const String subscriptionTitle = 'DLA+ Premium Aylık';
+  static const String subscriptionTitle = 'DLA+ Aylık';
   static const String subscriptionLength = '1 ay (otomatik yenilenir)';
 }
