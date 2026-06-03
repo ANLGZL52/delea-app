@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../services/plan_service.dart';
 import '../theme/delea_tokens.dart';
-import '../widgets/demo_limit_dialog.dart';
+import '../widgets/plan_limit_dialog.dart';
 import 'dictionary_screen.dart';
 import 'dla_info_screen.dart';
 import 'exam_intro_screen.dart';
@@ -27,19 +27,6 @@ class MainHomeScreen extends StatefulWidget {
 }
 
 class _MainHomeScreenState extends State<MainHomeScreen> {
-  bool _isPremium = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _refreshPremium();
-  }
-
-  Future<void> _refreshPremium() async {
-    final p = await PlanService.isPremium();
-    if (mounted) setState(() => _isPremium = p);
-  }
-
   /// Premium ekranından `true` dönerse abonelik aktif edilmiştir.
   Future<bool> _openPremium() async {
     if (!mounted) return false;
@@ -47,58 +34,15 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
       context,
       MaterialPageRoute(builder: (_) => const PremiumScreen()),
     );
-    await _refreshPremium();
     if (unlocked == true) return true;
     return await PlanService.isPremium();
   }
 
   Future<void> _onExamCardTap() async {
-    if (!mounted) return;
-    final isPrem = await PlanService.isPremium();
-    if (!mounted) return;
-    if (isPrem) {
-      await Navigator.push<void>(
-        context,
-        MaterialPageRoute(builder: (_) => const ExamIntroScreen()),
-      );
-      if (mounted) await _refreshPremium();
-      return;
-    }
-    if (!mounted) return;
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: DeleaColors.backgroundCard,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: const BorderSide(color: DeleaColors.border),
-        ),
-        title: const Text('Sınav simülasyonu — Premium'),
-        content: const Text(
-          'Bu bölüm Premium üyelere özel. Sınava devam etmek ve tüm pratiklere sınırsız erişmek için Premium’a geçebilirsin.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Kapat'),
-          ),
-          FilledButton.tonal(
-            onPressed: () async {
-              Navigator.pop(ctx);
-              final ok = await _openPremium();
-              if (!mounted) return;
-              if (ok) {
-                await Navigator.push<void>(
-                  context,
-                  MaterialPageRoute(builder: (_) => const ExamIntroScreen()),
-                );
-                if (mounted) await _refreshPremium();
-              }
-            },
-            child: const Text('Premium’a geç'),
-          ),
-        ],
-      ),
+    await _openPractice(
+      planKey: 'exam',
+      featureLabel: 'Sınav simülasyonu',
+      child: const ExamIntroScreen(),
     );
   }
 
@@ -194,7 +138,6 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
                                 builder: (_) => const ProfileScreen(),
                               ),
                             );
-                            await _refreshPremium();
                           },
                         ),
                       ],
@@ -241,17 +184,14 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
                       ),
                     ),
                     const SizedBox(height: 20),
-                    _PrimaryExamCard(
-                      locked: !_isPremium,
-                      onTap: _onExamCardTap,
-                    ),
+                    _PrimaryExamCard(onTap: _onExamCardTap),
 
                     const SizedBox(height: 24),
                     _SectionHeader(
                       title: 'Pratik alanları',
                       accent: const [Color(0xFF22C55E), Color(0xFF0EA5E9)],
                       subtitle:
-                          'Genel, senaryo, görsel: ücretsizde bölüm başı birer deneme; Premium’da sınırsız',
+                          'Genel, senaryo, görsel: ücretsiz planda sınırlı deneme; Premium’da sınırsız',
                     ),
                     const SizedBox(height: 12),
 
@@ -602,12 +542,8 @@ class _CircleIconButton extends StatelessWidget {
 }
 
 class _PrimaryExamCard extends StatelessWidget {
-  final bool locked;
   final VoidCallback onTap;
-  const _PrimaryExamCard({
-    this.locked = false,
-    required this.onTap,
-  });
+  const _PrimaryExamCard({required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -674,10 +610,10 @@ class _PrimaryExamCard extends StatelessWidget {
                       color: Colors.white.withValues(alpha: 0.12),
                     ),
                   ),
-                  child: Icon(
-                    locked ? Icons.lock_rounded : Icons.verified_rounded,
+                  child: const Icon(
+                    Icons.verified_rounded,
                     size: 30,
-                    color: const Color(0xFFEFF6FF),
+                    color: Color(0xFFEFF6FF),
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -685,55 +621,18 @@ class _PrimaryExamCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Wrap(
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        spacing: 8,
-                        runSpacing: 6,
-                        children: [
-                          Text(
-                            'Sınav simülasyonu',
-                            style: t.titleLarge?.copyWith(
-                              color: Colors.white,
-                              fontSize: 21,
-                              fontWeight: FontWeight.w800,
-                              height: 1.15,
-                            ),
-                          ),
-                          if (locked)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 3,
-                              ),
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [
-                                    Colors.amber.shade200.withValues(alpha: 0.3),
-                                    Colors.amber.shade100.withValues(alpha: 0.1),
-                                  ],
-                                ),
-                                borderRadius: BorderRadius.circular(999),
-                                border: Border.all(
-                                  color: Colors.amber.shade200.withValues(alpha: 0.4),
-                                ),
-                              ),
-                              child: Text(
-                                'Premium',
-                                style: TextStyle(
-                                  color: Colors.amber.shade100,
-                                  fontSize: 10.5,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: 0.4,
-                                ),
-                              ),
-                            ),
-                        ],
+                      Text(
+                        'Sınav simülasyonu',
+                        style: t.titleLarge?.copyWith(
+                          color: Colors.white,
+                          fontSize: 21,
+                          fontWeight: FontWeight.w800,
+                          height: 1.15,
+                        ),
                       ),
                       const SizedBox(height: 5),
                       Text(
-                        locked
-                            ? 'Premium ile çok aşamalı alıştırma ve anında geri bildirim'
-                            : 'Çok aşamalı alıştırma, sesle yanıt, anında geri bildirim',
+                        'Çok aşamalı alıştırma, sesle yanıt, anında geri bildirim',
                         style: t.bodySmall?.copyWith(
                           color: Colors.white.withValues(alpha: 0.9),
                           fontSize: 13.5,
@@ -744,8 +643,8 @@ class _PrimaryExamCard extends StatelessWidget {
                   ),
                 ),
                 Icon(
-                  locked ? Icons.chevron_right_rounded : Icons.arrow_forward_ios_rounded,
-                  size: locked ? 24 : 16,
+                  Icons.arrow_forward_ios_rounded,
+                  size: 16,
                   color: Colors.white.withValues(alpha: 0.9),
                 ),
               ],

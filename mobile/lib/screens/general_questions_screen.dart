@@ -239,7 +239,7 @@ class _GeneralQuestionsScreenState extends State<GeneralQuestionsScreen> {
         result: result,
       );
       await HistoryService.addAttempt(attempt);
-      await markPracticeUseIfDemo("general");
+      await markFreePlanUsage("general");
 
       if (!mounted) return;
       setState(() {

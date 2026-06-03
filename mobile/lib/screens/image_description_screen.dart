@@ -238,7 +238,7 @@ class _ImageDescriptionScreenState extends State<ImageDescriptionScreen> {
         result: result,
       );
       await HistoryService.addAttempt(attempt);
-      await markPracticeUseIfDemo("image");
+      await markFreePlanUsage("image");
 
       if (!mounted) return;
       setState(() {

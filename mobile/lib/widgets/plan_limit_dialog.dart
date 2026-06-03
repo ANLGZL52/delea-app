@@ -1,14 +1,14 @@
-// lib/widgets/demo_limit_dialog.dart
+// lib/widgets/plan_limit_dialog.dart
 
 import 'package:flutter/material.dart';
 
 import '../theme/delea_tokens.dart';
 import '../screens/premium_screen.dart';
 
-class DemoLimitDialog extends StatelessWidget {
+class PlanLimitDialog extends StatelessWidget {
   final String featureName;
 
-  const DemoLimitDialog({super.key, required this.featureName});
+  const PlanLimitDialog({super.key, required this.featureName});
 
   @override
   Widget build(BuildContext context) {
@@ -23,7 +23,7 @@ class DemoLimitDialog extends StatelessWidget {
         style: Theme.of(context).textTheme.titleLarge,
       ),
       content: Text(
-        "Demo hesapta (\"$featureName\") bölümünde bu cihazda toplam bir değerlendirme hakkın vardı; bu hak kullanıldı.\n\n"
+        "Ücretsiz planda \"$featureName\" bölümünde bu cihazda sınırlı deneme hakkın vardı; kotan doldu.\n\n"
         "Tüm pratik alanları ve sınav simülasyonu için Premium’a geçebilirsin.",
         style: Theme.of(context).textTheme.bodyLarge?.copyWith(
               color: DeleaColors.textSecondary,
@@ -50,13 +50,12 @@ class DemoLimitDialog extends StatelessWidget {
   }
 }
 
-/// Demo kotası dolduğunda — [PlanService.canUseFeature] ile uyumlu metin.
 Future<void> showPlanLimitDialog(
   BuildContext context, {
   String featureName = "Bu bölüm",
 }) {
   return showDialog<void>(
     context: context,
-    builder: (_) => DemoLimitDialog(featureName: featureName),
+    builder: (_) => PlanLimitDialog(featureName: featureName),
   );
 }

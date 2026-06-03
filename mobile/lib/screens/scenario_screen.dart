@@ -236,7 +236,7 @@ class _ScenarioScreenState extends State<ScenarioScreen> {
         result: result,
       );
       await HistoryService.addAttempt(attempt);
-      await markPracticeUseIfDemo("scenario");
+      await markFreePlanUsage("scenario");
 
       if (!mounted) return;
       setState(() {

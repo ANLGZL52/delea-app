@@ -298,39 +298,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   _InfoRow(
                     icon: Icons.workspace_premium_outlined,
                     label: "Plan",
-                    value: _isPremium ? "Premium" : "Demo",
+                    value: _isPremium ? "Premium" : "Ücretsiz",
                   ),
                 ],
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            // GÜVENLİK
-            _SectionCard(
-              title: "Güvenlik",
-              child: SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content:
-                            Text("Şifre değiştirme özelliği ileride eklenecek."),
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.key),
-                  label: const Text("Şifre Değiştir"),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.orange,
-                    foregroundColor: Colors.black,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                  ),
-                ),
               ),
             ),
 

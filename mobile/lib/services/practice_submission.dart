@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
-import '../widgets/demo_limit_dialog.dart';
+import '../widgets/plan_limit_dialog.dart';
 import 'plan_service.dart';
 
-/// Demo: bölüm başına toplam 1 değerlendirme hakkı bittiyse dialog, `false`. Premium: `true`.
-/// Başarılı değerlendirme sonrası: `markPracticeUseIfDemo` ile sayaç artar.
+/// Ücretsiz planda kota dolduysa dialog, `false`. Premium: `true`.
+/// Başarılı değerlendirme sonrası: [markFreePlanUsage] ile sayaç artar.
 Future<bool> canSubmitPractice(
   String planFeature, {
   String featureLabel = 'Bu bölüm',
@@ -18,7 +18,7 @@ Future<bool> canSubmitPractice(
 }
 
 /// İlk başarılı değerlendirmede (ücretsiz) ilgili bölüm hakkı düşer (bölüm başına toplam 1).
-Future<void> markPracticeUseIfDemo(String planFeature) async {
+Future<void> markFreePlanUsage(String planFeature) async {
   if (await PlanService.isPremium()) return;
   await PlanService.registerUsage(planFeature);
 }

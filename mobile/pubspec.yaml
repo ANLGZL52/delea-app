@@ -2,7 +2,7 @@ name: mobile
 description: "DLA+ — DLA / kabin mülakatı için İngilizce konuşma pratiği (Flutter)."
 publish_to: 'none'
 
-version: 1.0.7+17
+version: 1.0.8+18
 
 environment:
   sdk: '>=3.9.0 <4.0.0'
@@ -18,7 +18,7 @@ dependencies:
   record_windows: ^1.0.7
   path_provider: ^2.1.5
   flutter_tts: ^3.8.0
-  shared_preferences: ^2.3.2   # Demo/Premium & sayaçlar için
+  shared_preferences: ^2.3.2   # plan kotası & premium bayrağı
   in_app_purchase: ^3.1.8      # Store ödemeleri için eklendi
   url_launcher: ^6.3.1
   fl_chart: ^0.69.0            # Bar/radar chart için

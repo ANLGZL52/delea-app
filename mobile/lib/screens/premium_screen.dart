@@ -163,7 +163,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
                         Text(
                           _isPremium
                               ? 'Aktif Planın'
-                              : 'Şu Anda Demo Sürümdesin',
+                              : 'Ücretsiz planın aktif',
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 18,
@@ -175,7 +175,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
                           children: [
                             Chip(
                               label: Text(
-                                _isPremium ? 'PREMIUM' : 'DEMO',
+                                _isPremium ? 'PREMIUM' : 'ÜCRETSİZ',
                                 style: TextStyle(
                                   color:
                                       _isPremium ? Colors.black : Colors.white,
@@ -191,7 +191,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
                               child: Text(
                                 _isPremium
                                     ? 'Tüm bölümlere sınırsız erişimin var.'
-                                    : 'Her bölümden (Genel, Resim, Senaryo, Sınav) demo kotası vardır.',
+                                    : 'Her bölümden (Genel, Resim, Senaryo, Sınav) sınırlı ücretsiz deneme hakkın var.',
                                 style: const TextStyle(
                                   color: Colors.white70,
                                   fontSize: 13,

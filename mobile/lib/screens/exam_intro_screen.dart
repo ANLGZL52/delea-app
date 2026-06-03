@@ -3,9 +3,7 @@ import 'package:flutter/material.dart';
 import 'question_screen.dart';
 
 import '../constants/exam_config.dart';
-import '../services/plan_service.dart';
 import '../theme/delea_tokens.dart';
-import 'premium_screen.dart';
 
 class ExamIntroScreen extends StatelessWidget {
   const ExamIntroScreen({super.key});
@@ -133,49 +131,6 @@ class ExamIntroScreen extends StatelessWidget {
             const SizedBox(height: 12),
             FilledButton(
               onPressed: () async {
-                if (!await PlanService.isPremium()) {
-                  if (!context.mounted) return;
-                  await showDialog<void>(
-                    context: context,
-                    builder: (ctx) => AlertDialog(
-                      backgroundColor: DeleaColors.backgroundCard,
-                      title: const Text('Premium gerekli'),
-                      content: const Text(
-                        'Sınav simülasyonu yalnızca Premium abonelikle açılır. '
-                        'Ana ekrandaki sınava, Premium olduktan sonra ulaşırsın.',
-                      ),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(ctx),
-                          child: const Text('Kapat'),
-                        ),
-                        FilledButton.tonal(
-                          onPressed: () async {
-                            Navigator.pop(ctx);
-                            final unlocked = await Navigator.push<bool>(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const PremiumScreen(),
-                              ),
-                            );
-                            if (!context.mounted) return;
-                            final isPrem = unlocked == true ||
-                                await PlanService.isPremium();
-                            if (!isPrem) return;
-                            await Navigator.pushReplacement(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const QuestionScreen(),
-                              ),
-                            );
-                          },
-                          child: const Text('Premium’u aç'),
-                        ),
-                      ],
-                    ),
-                  );
-                  return;
-                }
                 if (!context.mounted) return;
                 await Navigator.pushReplacement(
                   context,
@@ -192,7 +147,7 @@ class ExamIntroScreen extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'Simülasyon çok aşamalıdır; sınava yalnızca Premium aboneleri başlayabilir.',
+              'Simülasyon çok aşamalıdır; ücretsiz planda sınırlı deneme hakkın vardır.',
               textAlign: TextAlign.center,
               style: t.bodySmall?.copyWith(
                 color: DeleaColors.textMuted,

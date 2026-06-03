@@ -7,6 +7,7 @@ import 'package:fl_chart/fl_chart.dart';
 import '../models/exam_question.dart';
 import '../models/exam_attempt.dart';
 import '../services/history_service.dart';
+import '../services/plan_service.dart';
 import 'question_screen.dart' show ClipRrectImage;
 
 class ExamResultScreen extends StatefulWidget {
@@ -159,6 +160,9 @@ class _ExamResultScreenState extends State<ExamResultScreen> {
     );
 
     await HistoryService.addAttempt(sessionAttempt);
+    if (!await PlanService.isPremium()) {
+      await PlanService.registerUsage('exam');
+    }
   }
 
   @override

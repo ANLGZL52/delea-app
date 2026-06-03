@@ -5,13 +5,13 @@ class PlanService {
   /// Android/iOS sunucu doğrulamasından (expires_at_ms); yoksa sadece bayrak.
   static const String _keyPremiumExpiresAtMs = "premium_expires_at_ms";
 
-  // Demo: her pratik türü için cihazda toplam 1 başarılı değerlendirme; günlük sıfırlama yok
+  // Ücretsiz plan: her bölüm için cihazda toplam deneme kotası (Premium: sınırsız)
   static const String _keyGeneral = "usage_general";
   static const String _keyScenario = "usage_scenario";
   static const String _keyImage = "usage_image";
   static const String _keyExam = "usage_exam";
 
-  static const int demoLimitPerFeature = 1;
+  static const int freeLimitPerFeature = 3;
 
   static Future<bool> isPremium() async {
     final prefs = await SharedPreferences.getInstance();
@@ -70,12 +70,12 @@ class PlanService {
     await prefs.setInt(key, current + 1);
   }
 
-  /// Ücretsiz planda: her bölümden (genel, senaryo, resim) toplam [demoLimitPerFeature] kullanım. Premium: sınırsız.
+  /// Ücretsiz planda: her bölümden toplam [freeLimitPerFeature] kullanım. Premium: sınırsız.
   static Future<bool> canUseFeature(String feature) async {
     if (await isPremium()) return true;
     final key = _featureKey(feature);
     final used = await _getUsage(key);
-    return used < demoLimitPerFeature;
+    return used < freeLimitPerFeature;
   }
 
   static Future<void> registerUsage(String feature) async {
