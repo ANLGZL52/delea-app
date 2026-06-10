@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:fl_chart/fl_chart.dart';
 
+import '../constants/exam_config.dart';
+import '../constants/exam_question_labels.dart';
 import '../models/exam_question.dart';
 import '../models/exam_attempt.dart';
 import '../services/history_service.dart';
@@ -131,7 +133,7 @@ class _ExamResultScreenState extends State<ExamResultScreen> {
       final fbMap = _extractFeedbackMap(map);
       final fbText = fbMap?['overall_comment']?.toString() ?? _extractFeedbackText(map);
 
-      if (s != null) scoreList.add(s);
+      if (s != null && ExamConfig.countsTowardScore(i)) scoreList.add(s);
 
       details.add({
         'questionId': q.id,
@@ -178,7 +180,9 @@ class _ExamResultScreenState extends State<ExamResultScreen> {
     final grammarList = <double>[];
     final vocabList = <double>[];
 
-    for (final raw in widget.results) {
+    for (int i = 0; i < widget.results.length; i++) {
+      if (!ExamConfig.countsTowardScore(i)) continue;
+      final raw = widget.results[i];
       if (raw is! Map<String, dynamic>) continue;
       final s = _extractScore(raw);
       if (s != null) scores.add(s);
@@ -239,7 +243,8 @@ class _ExamResultScreenState extends State<ExamResultScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Toplam soru: ${widget.questions.length}',
+                    'Toplam soru: ${widget.questions.length}  ·  '
+                    'Puanlanan: ${widget.questions.length - ExamConfig.unscoredCount}',
                     style: const TextStyle(color: Colors.white70, fontSize: 13),
                   ),
                   if (avgScore != null) ...[
@@ -341,6 +346,7 @@ class _ExamResultScreenState extends State<ExamResultScreen> {
                     scoresMap: scoresMap,
                     feedbackMap: fbMap,
                     feedbackText: fbText,
+                    countsTowardScore: ExamConfig.countsTowardScore(index),
                     onSpeakCorrectedAnswer: _speakText,
                   );
                 },
@@ -377,6 +383,7 @@ class _ResultQuestionCard extends StatelessWidget {
   final Map<String, dynamic>? scoresMap;
   final Map<String, dynamic>? feedbackMap;
   final String? feedbackText;
+  final bool countsTowardScore;
   final void Function(String text)? onSpeakCorrectedAnswer;
 
   const _ResultQuestionCard({
@@ -386,6 +393,7 @@ class _ResultQuestionCard extends StatelessWidget {
     this.scoresMap,
     this.feedbackMap,
     this.feedbackText,
+    this.countsTowardScore = true,
     this.onSpeakCorrectedAnswer,
   });
 
@@ -455,7 +463,7 @@ class _ResultQuestionCard extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              'Soru ${index + 1}  •  ${question.type.toUpperCase()}',
+              'Soru ${index + 1}  •  ${ExamQuestionLabels.typeLabel(question.type)}',
               style: const TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.w600,
@@ -471,7 +479,19 @@ class _ResultQuestionCard extends StatelessWidget {
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
-            if (overall != null) ...[
+            if (!countsTowardScore) ...[
+              const SizedBox(height: 8),
+              Text(
+                question.type == 'personal'
+                    ? 'Kişisel sorular puanlamaya dahil edilmez.'
+                    : 'Isınma soruları puanlamaya dahil edilmez.',
+                style: const TextStyle(
+                  color: _white54,
+                  fontSize: 12,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ] else if (overall != null) ...[
               const SizedBox(height: 8),
               Wrap(
                 crossAxisAlignment: WrapCrossAlignment.center,

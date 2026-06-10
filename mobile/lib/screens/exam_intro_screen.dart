@@ -64,30 +64,34 @@ class ExamIntroScreen extends StatelessWidget {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'Sorular yüksek sesle okunur. Kaydı başlatıp, düşünmek için kısa bir an '
-                            'bırakabilir; cevabınızı cümlelere böl.',
+                            'Sorular yüksek sesle okunur. Her soruda önce ${ExamConfig.thinkingSeconds} saniye '
+                            'düşünme süresi vardır; ardından kayıt otomatik başlar.',
                             style: t.bodySmall,
                           ),
                           const SizedBox(height: 14),
                           _BulletRow(
                             icon: Icons.schedule,
                             text:
-                                'Yaklaşık ${ExamConfig.totalCount} soru · 18–24 dakika; konuşma bölümlerinde 45–75 sn hedef.',
+                                '${ExamConfig.totalCount} soru · her soruda ${ExamConfig.thinkingSeconds} sn düşünme + ${ExamConfig.recordingSeconds} sn konuşma.',
                           ),
                           _BulletRow(
-                            icon: Icons.shuffle,
+                            icon: Icons.format_list_numbered,
                             text:
-                                'İçerik dağılımı: ${ExamConfig.introCount} ısınma, ${ExamConfig.generalCount} genel, ${ExamConfig.imageCount} resim, ${ExamConfig.scenarioCount} senaryo — rastgele sırada.',
+                                'Sıra: ${ExamConfig.introCount} ısınma → ${ExamConfig.personalCount} kişisel → '
+                                '${ExamConfig.generalCount} genel → ${ExamConfig.imageCount} fotoğraf → '
+                                '${ExamConfig.scenarioCount} senaryo (karıştırılmaz).',
                           ),
                           const _BulletRow(
                             icon: Icons.mic,
                             text:
-                                'Her soru için ayrı kayıt. Bitince cevaplar toplu değerlendirilir; internet kesintisinde bölüme yeniden dönmeden hata alabilirsiniz.',
+                                'Kayıt otomatik başlar. Düşünme sırasında "Cevap Ver" ile erken geçebilir; '
+                                'konuşma sırasında yalnızca "Sıradaki soru" kullanılır.',
                           ),
                           const _BulletRow(
-                            icon: Icons.warning_amber_rounded,
+                            icon: Icons.info_outline,
                             text:
-                                'Arayı çok uzatırsanız cevabınız nitelik açısından sınıflanabilir. Simülasyonu tek oturumda bitirmeniz iyi pratiktir.',
+                                'İlk ${ExamConfig.unscoredCount} soru puanlamaya dahil değildir. '
+                                'Genel süre sınırı yoktur.',
                           ),
                         ],
                       ),

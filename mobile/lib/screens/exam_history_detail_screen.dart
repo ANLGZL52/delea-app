@@ -1,5 +1,7 @@
 // lib/screens/exam_history_detail_screen.dart
 import 'package:flutter/material.dart';
+import '../constants/exam_config.dart';
+import '../constants/exam_question_labels.dart';
 import '../models/exam_attempt.dart';
 
 class ExamHistoryDetailScreen extends StatelessWidget {
@@ -22,6 +24,8 @@ class ExamHistoryDetailScreen extends StatelessWidget {
         return Icons.image_outlined;
       case 'intro':
         return Icons.play_circle_outline;
+      case 'personal':
+        return Icons.person_outline;
       default:
         return Icons.help_outline;
     }
@@ -128,7 +132,7 @@ class ExamHistoryDetailScreen extends StatelessWidget {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      "Soru ${index + 1} • ${qType.toUpperCase()}",
+                                      'Soru ${index + 1} • ${ExamQuestionLabels.typeLabel(qType)}',
                                       style: const TextStyle(
                                         color: Colors.white,
                                         fontWeight: FontWeight.w700,
@@ -143,7 +147,8 @@ class ExamHistoryDetailScreen extends StatelessWidget {
                                         fontSize: 12,
                                       ),
                                     ),
-                                    if (score != null) ...[
+                                    if (score != null &&
+                                        ExamConfig.countsTowardScore(index)) ...[
                                       const SizedBox(height: 6),
                                       Text(
                                         "Puan: ${score.toStringAsFixed(1)} / 100",

@@ -4,7 +4,7 @@ class ExamQuestion {
   /// Benzersiz soru ID'si (ör: gen_1, img_5, sc_10 vs.)
   final String id;
 
-  /// Soru tipi: 'intro', 'general', 'image', 'scenario'
+  /// Soru tipi: 'intro', 'personal', 'general', 'image', 'scenario'
   final String type;
 
   /// Soru metni

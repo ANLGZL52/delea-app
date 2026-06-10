@@ -19,6 +19,13 @@ static final List<ExamQuestion> introQuestions = [
   ),
 ];
 
+  /// Sabit 3. soru — kişisel, puanlamaya dahil değil.
+  static const ExamQuestion personalQuestion = ExamQuestion(
+    id: 'personal_thy',
+    type: 'personal',
+    text:
+        'How long have you been working for Turkish Airlines? Which aircraft certificates do you have?',
+  );
 
   // ==========================
   // GENEL SORULAR (60 ADET)
@@ -2311,6 +2318,7 @@ static List<ExamQuestion> _pickUniqueImageQuestions(int count, Random rnd) {
   // =====================================================
   static List<ExamQuestion> generateExam({
     int introCount = 2,
+    int personalCount = 1,
     int generalCount = 10,
     int imageCount = 5,
     int scenarioCount = 5,
@@ -2318,20 +2326,18 @@ static List<ExamQuestion> _pickUniqueImageQuestions(int count, Random rnd) {
     final rnd = Random();
     final List<ExamQuestion> exam = [];
 
-    // 1) Intro soruları: genelde sabit başta dursun
-    final intro = introQuestions.take(introCount).toList();
-    exam.addAll(intro);
+    // 1) Sabit başlangıç: intro + kişisel soru
+    exam.addAll(introQuestions.take(introCount));
+    if (personalCount > 0) {
+      exam.add(personalQuestion);
+    }
 
-    // 2) Diğer tiplerden rastgele seçim (görseller benzersiz olacak şekilde)
+    // 2) Blok sırası: genel → fotoğraf → senaryo (karıştırma yok)
     exam.addAll(_pickRandom(generalQuestions, generalCount, rnd));
     exam.addAll(_pickUniqueImageQuestions(imageCount, rnd));
     exam.addAll(_pickRandom(scenarioQuestions, scenarioCount, rnd));
 
-    // 3) Intro soruları başta sabit kalsın, geri kalan karışsın
-    final rest = exam.skip(intro.length).toList();
-    rest.shuffle(rnd);
-
-    return [...intro, ...rest];
+    return exam;
   }
 
   /// Pratik ekranlarında her açılışta farklı ilk soru için karışık kopya.

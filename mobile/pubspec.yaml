@@ -2,7 +2,7 @@ name: mobile
 description: "DLA+ — DLA / kabin mülakatı için İngilizce konuşma pratiği (Flutter)."
 publish_to: 'none'
 
-version: 1.0.8+18
+version: 1.0.8+19
 
 environment:
   sdk: '>=3.9.0 <4.0.0'
@@ -47,7 +47,7 @@ flutter_launcher_icons:
   image_path: assets/icon/app_icon.png
   min_sdk_android: 21
   # Play / adaptive: logo siyah arka planlı
-  adaptive_icon_background: "#000000"
+  adaptive_icon_background: "#001A4D"
   adaptive_icon_foreground: assets/icon/app_icon.png
   web:
     generate: true
