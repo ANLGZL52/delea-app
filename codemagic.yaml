@@ -1,5 +1,7 @@
-# DLA+ iOS — manual signing: delea_dist_cert + delea_app_store (Codemagic UI).
-# Optional app env (Secret): DELEA_P12_PASSWORD = .p12 export password
+# DLA+ iOS — automatic signing via App Store Connect integration "Codemagic delea".
+# Manuel .p12 (delea_dist_cert) revoke/expired olabildiği için otomatik imzalamaya
+# geçildi: codemagic her build'de App Store Connect API anahtarıyla taze dağıtım
+# sertifikası + provizyon profili üretir (App Manager yetkisi gerekir).
 workflows:
   ios-workflow:
     name: DLA+ iOS
@@ -8,51 +10,27 @@ workflows:
     integrations:
       app_store_connect: "Codemagic delea"
     environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.delea.app
       groups:
-        - delea_ios   # App env: DELEA_P12_PASSWORD (Secret) bu grupta
+        - delea_ios
       flutter: stable
       xcode: latest
-      ios_signing:
-        provisioning_profiles:
-          - profile: delea_app_store
-            environment_variable: DELEA_PROFILE_PATH
-        certificates:
-          - certificate: delea_dist_cert
-            environment_variable: DELEA_CERT_PATH
     scripts:
-      - name: Set up keychain
-        script: keychain initialize
-      - name: Install certificate and provisioning profile
+      - name: Set up code signing (automatic)
         script: |
           set -e
           set -x
-          CERT_PATH="${DELEA_CERT_PATH:-}"
-          PROFILE_PATH="${DELEA_PROFILE_PATH:-}"
-          CERT_PASSWORD="${DELEA_P12_PASSWORD:-${CM_CERTIFICATE_PASSWORD:-}}"
-          # Fallback: Codemagic MobileDevice dirs
-          if [ -z "$CERT_PATH" ] && [ -d "$HOME/Library/MobileDevice/Certificates" ]; then
-            CERT_PATH="$(find "$HOME/Library/MobileDevice/Certificates" -maxdepth 1 -type f \( -name '*.p12' -o -name '*.P12' \) 2>/dev/null | head -1)"
-          fi
-          if [ -z "$PROFILE_PATH" ] && [ -d "$HOME/Library/MobileDevice/Provisioning Profiles" ]; then
-            PROFILE_PATH="$(find "$HOME/Library/MobileDevice/Provisioning Profiles" -maxdepth 1 -name '*.mobileprovision' 2>/dev/null | head -1)"
-          fi
-          if [ -z "$CERT_PATH" ] || [ ! -f "$CERT_PATH" ]; then
-            echo "ERROR: No certificate file. DELEA_CERT_PATH=$DELEA_CERT_PATH"
-            ls -la "$HOME/Library/MobileDevice/Certificates" 2>/dev/null || true
-            exit 1
-          fi
-          echo "Using certificate: $CERT_PATH"
-          if [ -n "$CERT_PASSWORD" ]; then
-            keychain add-certificates --certificate "$CERT_PATH" --certificate-password "$CERT_PASSWORD"
-          else
-            keychain add-certificates --certificate "$CERT_PATH"
-          fi
-          if [ -n "$PROFILE_PATH" ] && [ -f "$PROFILE_PATH" ]; then
-            PROFILES_HOME="$HOME/Library/MobileDevice/Provisioning Profiles"
-            mkdir -p "$PROFILES_HOME"
-            cp "$PROFILE_PATH" "$PROFILES_HOME/$(uuidgen).mobileprovision"
-            echo "Installed profile from $PROFILE_PATH"
-          fi
+          keychain initialize
+          # Bundle id için dağıtım sertifikası + App Store profili getir; yoksa OLUŞTUR.
+          app-store-connect fetch-signing-files "com.delea.app" \
+            --type IOS_APP_STORE \
+            --create
+          keychain add-certificates
+          xcode-project use-profiles \
+            --project "$CM_BUILD_DIR/mobile/ios/Runner.xcodeproj" \
+            --archive-method app-store
           echo "--- Keychain identities ---"
           security find-identity -v -p codesigning
       - name: Get packages and CocoaPods
@@ -61,18 +39,13 @@ workflows:
           cd "$CM_BUILD_DIR/mobile"
           flutter pub get
           cd ios && pod install
-      - name: Apply provisioning profiles to Xcode project
-        script: |
-          set -e
-          xcode-project use-profiles \
-            --project "$CM_BUILD_DIR/mobile/ios/Runner.xcodeproj" \
-            --archive-method app-store
       - name: Flutter build IPA
         script: |
           set -e
           cd "$CM_BUILD_DIR/mobile"
+          # use-profiles tarafından üretilen export options'ı kullan (otomatik imzalama).
           flutter build ipa --release \
-            --export-options-plist=ios/ExportOptions.plist \
+            --export-options-plist=/Users/builder/export_options.plist \
             --dart-define=API_BASE_URL=https://delea-app-production.up.railway.app
           ls -la build/ios/ipa/
           if [ -n "${CM_BUILD_OUTPUT_DIR:-}" ]; then
