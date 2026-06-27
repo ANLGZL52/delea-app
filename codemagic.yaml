@@ -10,21 +10,28 @@ workflows:
     integrations:
       app_store_connect: "Codemagic delea"
     environment:
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: com.delea.app
       groups:
         - delea_ios
       flutter: stable
       xcode: latest
     scripts:
-      - name: Apply signing profiles to Xcode project
+      - name: Set up code signing (fresh cert + profile)
         script: |
           set -e
-          # codemagic, ios_signing (distribution_type + bundle_identifier) ve
-          # app_store_connect entegrasyonu ile sertifika+profili yerleşik
-          # "Set up code signing identities" adımında otomatik getirip keychain'e
-          # ekler. Burada yalnızca profili Xcode projesine uygula.
+          set -x
+          keychain initialize
+          # Eski/zehirli profilleri temizle (revoke sertifikaya bağlı "delea_app_store" dahil).
+          rm -rf "$HOME/Library/MobileDevice/Provisioning Profiles"/* 2>/dev/null || true
+          # Sertifika oluşturmak için 2048-bit private key üret.
+          PK="$HOME/cm_cert_key.pem"
+          openssl genrsa -out "$PK" 2048
+          # App Store Connect API (entegrasyon "Codemagic delea") ile com.delea.app için
+          # GEÇERLİ dağıtım sertifikası + App Store profili getir; yoksa OLUŞTUR.
+          app-store-connect fetch-signing-files "com.delea.app" \
+            --type IOS_APP_STORE \
+            --certificate-key @file:"$PK" \
+            --create
+          keychain add-certificates
           xcode-project use-profiles \
             --project "$CM_BUILD_DIR/mobile/ios/Runner.xcodeproj" \
             --archive-method app-store
