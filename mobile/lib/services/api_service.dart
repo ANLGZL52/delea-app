@@ -35,7 +35,10 @@ class ApiService {
       }
       return _apiBaseUrlEnv;
     }
-    if (kReleaseMode) return 'https://api.delea.app';
+    // Release varsayılanı: gerçek çalışan backend. (api.delea.app henüz DNS'te
+    // çözülmüyor; --dart-define=API_BASE_URL=... verilmezse bile uygulama
+    // sessizce ölü adrese gitmemeli.)
+    if (kReleaseMode) return 'https://delea-app-production.up.railway.app';
     if (!kIsWeb &&
         (isAndroidPlatform || defaultTargetPlatform == TargetPlatform.android)) {
       return 'http://10.0.2.2:8000';

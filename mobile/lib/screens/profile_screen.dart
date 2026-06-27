@@ -23,8 +23,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _loadingPlan = true;
   bool _signedIn = true;
   String _userName = SessionService.guestDisplayName;
-  String _userEmail = SessionService.guestEmail;
-  final String _memberSince = '2025-11-16';
+  String _memberSince = '—';
 
   @override
   void initState() {
@@ -33,22 +32,38 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _loadAll() async {
-    await SessionService.ensureDefaultProfile(
-      defaultName: 'Kullanıcı',
-      defaultEmail: AppLegal.supportEmail,
-    );
+    await SessionService.ensureDefaultProfile(defaultName: 'Kullanıcı');
+    await SessionService.removeStoredEmailIfEquals(AppLegal.supportEmail);
     final isPrem = await PlanService.isPremium();
     final signedIn = await SessionService.isSignedIn();
     final name = await SessionService.displayName();
-    final email = await SessionService.email();
+    final since = await SessionService.memberSince();
     if (!mounted) return;
     setState(() {
       _isPremium = isPrem;
       _signedIn = signedIn;
       _userName = name;
-      _userEmail = email;
+      _memberSince = _formatDate(since);
       _loadingPlan = false;
     });
+  }
+
+  String _formatDate(DateTime d) {
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${d.year}-${two(d.month)}-${two(d.day)}';
+  }
+
+  Future<void> _emailSupport() async {
+    try {
+      await openLegalUrl('mailto:${AppLegal.supportEmail}');
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('E-posta uygulaması açılamadı: ${AppLegal.supportEmail}'),
+        ),
+      );
+    }
   }
 
   void _onTapExamHistory() {
@@ -70,10 +85,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _onTapSignIn() async {
-    await SessionService.signIn(
-      displayName: 'Kullanıcı',
-      email: AppLegal.supportEmail,
-    );
+    await SessionService.signIn();
     await _loadAll();
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -177,14 +189,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             fontWeight: FontWeight.w700,
                           ),
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          _userEmail,
-                          style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 13,
-                          ),
-                        ),
                         const SizedBox(height: 8),
                         Container(
                           padding: const EdgeInsets.symmetric(
@@ -284,12 +288,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _InfoRow(
-                    icon: Icons.email_outlined,
-                    label: "E-posta Adresi",
-                    value: _userEmail,
-                  ),
-                  const SizedBox(height: 12),
-                  _InfoRow(
                     icon: Icons.calendar_today_outlined,
                     label: "Üyelik Tarihi",
                     value: _memberSince,
@@ -313,19 +311,59 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'Her türlü soru ve geri bildirimin için:',
+                    'Soru ve geri bildirimlerin için DLA+ destek ekibine '
+                    'yazabilirsin. (Bu, uygulamanın resmi destek adresidir; '
+                    'senin hesap adresin değildir.)',
                     style: TextStyle(
                       color: Colors.white70,
                       fontSize: 13,
+                      height: 1.4,
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    AppLegal.supportEmail,
-                    style: const TextStyle(
-                      color: Colors.blueAccent,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
+                  const SizedBox(height: 12),
+                  InkWell(
+                    onTap: _emailSupport,
+                    borderRadius: BorderRadius.circular(10),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.support_agent,
+                            color: Colors.blueAccent,
+                            size: 22,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'DLA+ destek e-postası',
+                                  style: TextStyle(
+                                    color: Colors.white54,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  AppLegal.supportEmail,
+                                  style: const TextStyle(
+                                    color: Colors.blueAccent,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Icon(
+                            Icons.mail_outline,
+                            color: Colors.white38,
+                            size: 18,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                   const SizedBox(height: 12),

@@ -7,6 +7,7 @@ class SessionService {
   static const String _keySignedIn = 'session_signed_in';
   static const String _keyDisplayName = 'session_display_name';
   static const String _keyEmail = 'session_email';
+  static const String _keyMemberSinceMs = 'session_member_since_ms';
 
   static const String guestDisplayName = 'Misafir';
   static const String guestEmail = '—';
@@ -43,6 +44,23 @@ class SessionService {
     if (!prefs.containsKey(_keySignedIn)) {
       await prefs.setBool(_keySignedIn, true);
     }
+    // Üyelik tarihi: bu cihazda ilk kurulumda damgalanır (sabit değil, kişiye özel).
+    if (!prefs.containsKey(_keyMemberSinceMs)) {
+      await prefs.setInt(
+        _keyMemberSinceMs,
+        DateTime.now().millisecondsSinceEpoch,
+      );
+    }
+  }
+
+  /// Bu cihazdaki ilk kullanım (üyelik) tarihi. Kayıt yoksa bugünü damgalar.
+  static Future<DateTime> memberSince() async {
+    final prefs = await SharedPreferences.getInstance();
+    final ms = prefs.getInt(_keyMemberSinceMs);
+    if (ms != null) return DateTime.fromMillisecondsSinceEpoch(ms);
+    final now = DateTime.now();
+    await prefs.setInt(_keyMemberSinceMs, now.millisecondsSinceEpoch);
+    return now;
   }
 
   static Future<void> signOut() async {
@@ -50,13 +68,17 @@ class SessionService {
     await prefs.setBool(_keySignedIn, false);
   }
 
-  static Future<void> signIn({
-    required String displayName,
-    required String email,
-  }) async {
+  static Future<void> signIn({String displayName = 'Kullanıcı'}) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_keySignedIn, true);
     await prefs.setString(_keyDisplayName, displayName);
-    await prefs.setString(_keyEmail, email);
+  }
+
+  /// Eski sürümlerde destek e-postası profil e-postası olarak kaydedilmiş olabilir.
+  static Future<void> removeStoredEmailIfEquals(String email) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getString(_keyEmail) == email) {
+      await prefs.remove(_keyEmail);
+    }
   }
 }

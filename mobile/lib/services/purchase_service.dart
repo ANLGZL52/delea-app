@@ -154,7 +154,16 @@ class PurchaseService {
     return null;
   }
 
-  /// Mağaza satın alımı onaylandıysa premium aç; sunucu yanıt vermezse yerel yedek.
+  /// Mağaza satın alımı onaylandıysa premium aç.
+  ///
+  /// Doğrulama mantığı (ödeyen kullanıcı asla mağdur edilmeyecek şekilde):
+  /// - Sunucu DOĞRULADI (`verified:true`)  → gerçek `expires_at_ms` kullanılır.
+  /// - Sunucu doğrulama YAPAMADI (`evaluated:false`: secret yok / ağ hatası)
+  ///   → mağaza zaten ödemeyi onayladığı için cömert 32 günlük fallback. Sonraki
+  ///     açılışta `refreshOnLaunch` ile yeniden doğrulanır ve gerçek süreye oturur.
+  /// - Sunucu KESİN "aktif değil" dedi (`evaluated:true`, verified:false: iade/
+  ///   iptal/henüz Apple'a yansımamış yeni satın alma) → kısa 3 günlük grace;
+  ///     geçici yansıma gecikmesini tolere eder ama suistimali sınırlar.
   Future<void> _activatePremiumFromPurchase(
     PurchaseDetails purchaseDetails,
   ) async {
@@ -162,6 +171,7 @@ class PurchaseService {
 
     final token = _purchaseVerificationPayload(purchaseDetails);
     var serverVerified = false;
+    var serverEvaluated = false; // sunucu kesin bir yanıt verdi mi?
     int? expiresAtMs;
 
     if (token.isNotEmpty) {
@@ -173,11 +183,17 @@ class PurchaseService {
         );
         if (result['verified'] == true) {
           serverVerified = true;
+          serverEvaluated = true;
           expiresAtMs = _parseExpiresAtMs(result['expires_at_ms']);
-        } else if (kDebugMode) {
-          print('Purchase server verify failed: ${result['reason']}');
+        } else {
+          // Eski backend `evaluated` döndürmez → null → false → cömert fallback.
+          serverEvaluated = result['evaluated'] == true;
+          if (kDebugMode) {
+            print('Purchase server verify failed: ${result['reason']}');
+          }
         }
       } catch (e) {
+        // Ağ/sunucu hatası: doğrulama yapılamadı → cömert fallback.
         if (kDebugMode) {
           print('Purchase verification error: $e');
         }
@@ -186,8 +202,18 @@ class PurchaseService {
 
     if (serverVerified) {
       await PlanService.setPremium(expiresAtMs: expiresAtMs);
+    } else if (serverEvaluated) {
+      // Sunucuya ulaşıldı ve "aktif değil" denildi. Yeni satın almanın Apple'a
+      // yansıması gecikmiş olabilir → kısa grace ver, sonraki açılışta düzeltilir.
+      final graceExpiry = DateTime.now()
+          .add(const Duration(days: 3))
+          .millisecondsSinceEpoch;
+      await PlanService.setPremium(expiresAtMs: graceExpiry);
+      if (kDebugMode) {
+        print('Premium kısa grace ile açıldı (sunucu aktif abonelik görmedi).');
+      }
     } else {
-      // Mağaza satın alımı tamamlandı; backend yapılandırılmamış veya geçici hata.
+      // Doğrulama yapılamadı (secret yok / ağ). Mağaza ödemeyi onayladı → cömert fallback.
       final fallbackExpiry = DateTime.now()
           .add(const Duration(days: 32))
           .millisecondsSinceEpoch;
@@ -201,6 +227,21 @@ class PurchaseService {
 
     if (!_premiumActivatedController.isClosed) {
       _premiumActivatedController.add(null);
+    }
+  }
+
+  /// Uygulama açılışında sessizce aktif abonelikleri tazeler: mağaza, aktif
+  /// abonelik/yenileme işlemlerini `purchaseStream`'e yeniden gönderir; böylece
+  /// `expires_at_ms` güncellenir ve uzun süre uygulamayı açmayan ödeyen
+  /// kullanıcı premium'unu kaybetmez. Sessiz ve hataya dayanıklıdır.
+  Future<void> refreshOnLaunch() async {
+    if (!_isSupportedPlatform || !_isAvailable) return;
+    try {
+      await _iap.restorePurchases();
+    } catch (e) {
+      if (kDebugMode) {
+        print('refreshOnLaunch restore error: $e');
+      }
     }
   }
 
